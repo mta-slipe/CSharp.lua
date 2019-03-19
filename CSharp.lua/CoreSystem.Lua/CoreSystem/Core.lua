@@ -46,6 +46,7 @@ local modules = {}
 local usings = {}
 local metadatas = {}
 local Object, ValueType
+local isTrying = 0
 
 local function new(cls, ...)
   local this = setmetatable({}, cls)
@@ -55,7 +56,11 @@ end
 local function throw(e, lv)
   if e == nil then e = System.NullReferenceException() end
   e:traceback(lv)
-  error(e)
+  if isTrying == 0 then
+    error(e:ToString())
+  else
+    error(e)
+  end
 end
 
 local function xpcallErr(e)
@@ -70,11 +75,15 @@ local function xpcallErr(e)
 end
 
 local function try(try, catch, finally)
+  isTrying = isTrying + 1
   local ok, status, result = xpcall(try, xpcallErr)
+  isTrying = isTrying - 1
   if not ok then
     if catch then
       if finally then
+        isTrying = isTrying + 1
         ok, status, result = xpcall(catch, xpcallErr, status)
+        isTrying = isTrying - 1
       else
         ok, status, result = true, catch(status)
       end
@@ -90,7 +99,7 @@ local function try(try, catch, finally)
     finally()
   end
   if not ok then
-    error(status)
+    error(status:ToString())
   end
   return status, result
 end
@@ -361,15 +370,7 @@ System.luaVersion = version
 
 if version < 5.3 then
   local bnot, band, bor, xor, sl, sr
-  local ok, bit = pcall(require, "bit")
-  if ok then
-    bnot, band, bor, xor, sl, sr = bit.bnot, bit.band, bit.bor, bit.bxor, bit.lshift, bit.rshift
-  else
-    local function disable()
-      throw(System.NotSupportedException("bit operation is not enabled."))
-    end
-    bnot, band, bor, xor, sl, sr  = disable, disable, disable, disable, disable, disable
-  end
+  bnot, band, bor, xor, sl, sr = bitNot, bitAnd, bitOr, bitXor, bitLShift, bitRShift
 
   System.bnot = bnot
   System.band = band
@@ -1236,6 +1237,4 @@ function System.init(namelist, conf)
 	System.init = nil
 end
 
-return function (config)
-  System.config = config or {}
-end
+System.config = config or {}
