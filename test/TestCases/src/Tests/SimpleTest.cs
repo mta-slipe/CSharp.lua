@@ -225,18 +225,47 @@ namespace TestCases
       }
     }
 
-
     [TestCase]
-    public static void ImplicitTest07() {
-	  /*
-	  var obj0 = new LuaObject();
-      var obj1 = new PropValue<int>() { value = 123 };
-
-	  var array = new LuaArray<int>();
-	  array.SetValue(0,obj0);
-	  array.SetValue(1,obj1);
-	  */
-	}
-
+    public static void ImplicitTest08() {
+      var value = new PropValue<bool>() { value = false };
+      if (!value)
+		{
+        
+      }
+	  else
+		{
+		  throw new Exception("the correct value is false");
+		}
+    }
+    
+    [TestCase]
+    public static void ImplicitTest09() {
+      var value = new PropValue<bool>() { value = false };
+      if (value)
+		{
+		  throw new Exception("the correct value is false");
+      }
+    }
+	
+    
+    [TestCase]
+    public static void ImplicitTest10() {
+      var value = new PropValue<bool>() { value = false };
+	  var falseValue = value ? true : false;
+      if (falseValue)
+		{
+		  throw new Exception("the correct value is false");
+      }
+    }
+    
+    [TestCase]
+    public static void ImplicitTest11() {
+      var value = new PropValue<bool>() { value = false };
+	  var trueValue = !value ? true : false;
+      if (!trueValue)
+		{
+		  throw new Exception("the correct value is true");
+      }
+    }
   }
 }
