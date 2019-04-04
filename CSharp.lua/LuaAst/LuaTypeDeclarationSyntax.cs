@@ -38,6 +38,7 @@ namespace CSharpLua.LuaAst {
     public bool IsClassUsed { get; set; }
     protected bool isStruct_;
     public bool IsForceStaticCtor { get; set; }
+    private bool hasTooManyLocalVariables_;
 
     private LuaLocalAreaSyntax local_ = new LuaLocalAreaSyntax();
     private List<LuaTypeDeclarationSyntax> nestedTypeDeclarations_ = new List<LuaTypeDeclarationSyntax>();
@@ -165,8 +166,7 @@ namespace CSharpLua.LuaAst {
     }
 
     private void AddResultTable(LuaIdentifierNameSyntax name) {
-      LuaKeyValueTableItemSyntax item = new LuaKeyValueTableItemSyntax(name, name);
-      resultTable_.Items.Add(item);
+      AddResultTable(new LuaKeyValueTableItemSyntax(name, name));
     }
 
     private void AddResultTable(LuaIdentifierNameSyntax name, LuaExpressionSyntax value) {
@@ -177,19 +177,32 @@ namespace CSharpLua.LuaAst {
       resultTable_.Items.Add(item);
     }
 
-    public void AddMethod(LuaIdentifierNameSyntax name, LuaFunctionExpressionSyntax method, bool isPrivate, LuaDocumentStatement document = null) {
+    public void AddMethod(LuaIdentifierNameSyntax name, LuaFunctionExpressionSyntax method, bool isPrivate, LuaDocumentStatement document = null, bool isMoreThanLocalVariables = false) {
       if (document != null && document.HasIgnoreAttribute) {
         return;
       }
 
-      local_.Variables.Add(name);
-      LuaAssignmentExpressionSyntax assignment = new LuaAssignmentExpressionSyntax(name, method);
-      if (document != null && !document.IsEmpty) {
-        methodList_.Statements.Add(document);
-      }
-      methodList_.Statements.Add(new LuaExpressionStatementSyntax(assignment));
-      if (!isPrivate) {
-        AddResultTable(name);
+      if (isMoreThanLocalVariables) {
+        if (!hasTooManyLocalVariables_) {
+          methodList_.Statements.Add(new LuaShortCommentStatement(" too many local variables (limit is 200)"));
+          methodList_.Statements.Add(new LuaLocalVariableDeclaratorSyntax(LuaIdentifierNameSyntax.MorenManyLocalVarTempTable, LuaTableExpression.Empty));
+          hasTooManyLocalVariables_ = true;
+        }
+        if (document != null && !document.IsEmpty) {
+          methodList_.Statements.Add(document);
+        }
+        var left = new LuaMemberAccessExpressionSyntax(LuaIdentifierNameSyntax.MorenManyLocalVarTempTable, name);
+        methodList_.Statements.Add(new LuaAssignmentExpressionSyntax(left, method));
+        AddResultTable(name, left);
+      } else {
+        local_.Variables.Add(name);
+        if (document != null && !document.IsEmpty) {
+          methodList_.Statements.Add(document);
+        }
+        methodList_.Statements.Add(new LuaAssignmentExpressionSyntax(name, method));
+        if (!isPrivate) {
+          AddResultTable(name);
+        }
       }
     }
 

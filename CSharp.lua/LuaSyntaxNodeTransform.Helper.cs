@@ -330,12 +330,18 @@ namespace CSharpLua {
       return generator_.IsEventFiled(symbol);
     }
 
+    private bool IsMoreThanLocalVariables(ISymbol symbol) {
+      return generator_.IsMoreThanLocalVariables(symbol);
+    }
+
     private bool IsInternalMember(SyntaxNode node, ISymbol symbol) {
-      bool isVirtual = symbol.IsOverridable() && !generator_.IsSealed(symbol.ContainingType);
-      if (!isVirtual) {
-        var typeSymbol = CurTypeSymbol;
-        if (typeSymbol.IsContainsInternalSymbol(symbol)) {
-          return true;
+      if (symbol.IsFromCode()) {
+        bool isVirtual = symbol.IsOverridable() && !generator_.IsSealed(symbol.ContainingType);
+        if (!isVirtual) {
+          var typeSymbol = CurTypeSymbol;
+          if (typeSymbol.IsContainsInternalSymbol(symbol) && !IsMoreThanLocalVariables(symbol)) {
+            return true;
+          }
         }
       }
       return false;
@@ -741,7 +747,7 @@ namespace CSharpLua {
     }
 
     private LuaInvocationExpressionSyntax BuildObjectCreationInvocation(IMethodSymbol symbol, LuaExpressionSyntax expression) {
-      int constructorIndex = symbol.GetConstructorIndex();
+      int constructorIndex = GetConstructorIndex(symbol);
       if (constructorIndex > 1) {
         return new LuaInvocationExpressionSyntax(LuaIdentifierNameSyntax.SystemNew, expression, constructorIndex.ToString());
       }
@@ -1335,5 +1341,27 @@ namespace CSharpLua {
       var typeSymbol = semanticModel_.GetTypeInfo(node).Type;
       return BuildDeconstructExpression(typeSymbol, expression, node);
     }
+
+    public int GetConstructorIndex(IMethodSymbol symbool) {
+      Contract.Assert(symbool.MethodKind == MethodKind.Constructor);
+      if (generator_.IsFromLuaModule(symbool.ContainingType)) {
+        var typeSymbol = (INamedTypeSymbol)symbool.ReceiverType;
+        var ctors = typeSymbol.Constructors.Where(i => !i.IsStatic).ToList();
+        if (ctors.Count > 1) {
+          int firstCtorIndex = ctors.IndexOf(i => i.Parameters.IsEmpty);
+          if (firstCtorIndex != -1 && firstCtorIndex != 0) {
+            var firstCtor = ctors[firstCtorIndex];
+            ctors.Remove(firstCtor);
+            ctors.Insert(0, firstCtor);
+          }
+          int index = ctors.IndexOf(symbool);
+          Contract.Assert(index != -1);
+          int ctroCounter = index + 1;
+          return ctroCounter;
+        }
+      }
+      return 0;
+    }
+
   }
 }

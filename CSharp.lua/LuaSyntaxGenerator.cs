@@ -20,6 +20,7 @@ using System.Diagnostics.Contracts;
 using System.Linq;
 using System.IO;
 using System.Text;
+using System.Reflection;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -53,13 +54,27 @@ namespace CSharpLua {
       public bool HasSemicolon { get; set; }
       private int indent_;
       public string IndentString { get; private set; }
-      public bool IsNewest { get; set; }
+      public bool IsClassic { get; set; }
       public bool IsExportMetadata { get; set; }
+      public string BaseFolder { get; set; } = "";
+      public bool IsExportAttributesAll { get; private set; }
+      public HashSet<string> ExportAttributes { get; private set; }
+      public HashSet<string> LuaModuleLibs;
 
       public SettingInfo() {
         Indent = 2;
-        HasSemicolon = false;
-        IsNewest = true;
+      }
+
+      public string[] Attributes {
+        set {
+          if (value != null) {
+            if (value.Length == 0) {
+              IsExportAttributesAll = true;
+            } else {
+              ExportAttributes = new HashSet<string>(value);
+            }
+          }
+        }
       }
 
       public int Indent {
@@ -84,12 +99,9 @@ namespace CSharpLua {
     private HashSet<string> exportEnums_ = new HashSet<string>();
     private HashSet<INamedTypeSymbol> ignoreExportTypes_ = new HashSet<INamedTypeSymbol>();
     private HashSet<ISymbol> forcePublicSymbols_ = new HashSet<ISymbol>();
-    private readonly bool isExportAttributesAll_;
-    private HashSet<string> exportAttributes_;
     private List<LuaEnumDeclarationSyntax> enumDeclarations_ = new List<LuaEnumDeclarationSyntax>();
     private Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>> partialTypes_ = new Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>>();
     private IMethodSymbol mainEntryPoint_;
-    public string BaseFolder { get; }
     private HashSet<string> monoBehaviourSpeicalMethodNames_;
     private INamedTypeSymbol monoBehaviourTypeSymbol_;
 
@@ -100,7 +112,7 @@ namespace CSharpLua {
       };
     }
 
-    public LuaSyntaxGenerator(IEnumerable<SyntaxTree> syntaxTrees, IEnumerable<MetadataReference> references, CSharpCompilationOptions options, IEnumerable<string> metas, SettingInfo setting, string[] attributes, string baseFolder = "") {
+    public LuaSyntaxGenerator(IEnumerable<SyntaxTree> syntaxTrees, IEnumerable<MetadataReference> references, CSharpCompilationOptions options, IEnumerable<string> metas, SettingInfo setting) {
       CSharpCompilation compilation = CSharpCompilation.Create("_", syntaxTrees, references, options.WithOutputKind(OutputKind.DynamicallyLinkedLibrary));
       using (MemoryStream ms = new MemoryStream()) {
         EmitResult result = compilation.Emit(ms);
@@ -111,16 +123,8 @@ namespace CSharpLua {
         }
       }
       compilation_ = compilation;
-      BaseFolder = baseFolder;
       XmlMetaProvider = new XmlMetaProvider(metas);
       Setting = setting;
-      if (attributes != null) {
-        if (attributes.Length == 0) {
-          isExportAttributesAll_ = true;
-        } else {
-          exportAttributes_ = new HashSet<string>(attributes);
-        }
-      }
       if (compilation.ReferencedAssemblyNames.Any(i => i.Name.Contains("UnityEngine"))) {
         monoBehaviourTypeSymbol_ = compilation.GetTypeByMetadataName("UnityEngine.MonoBehaviour");
         if (monoBehaviourTypeSymbol_ != null) {
@@ -178,7 +182,7 @@ namespace CSharpLua {
     }
 
     internal string RemoveBaseFolder(string patrh) {
-      return patrh.Remove(0, BaseFolder.Length).TrimStart(Path.DirectorySeparatorChar, '/');
+      return patrh.Remove(0, Setting.BaseFolder.Length).TrimStart(Path.DirectorySeparatorChar, '/');
     }
 
     private string GetOutFilePath(string inFilePath, string output_, out string module) {
@@ -232,11 +236,11 @@ namespace CSharpLua {
     }
 
     internal bool IsExportAttribute(INamedTypeSymbol attributeTypeSymbol) {
-      if (isExportAttributesAll_) {
+      if (Setting.IsExportAttributesAll) {
         return true;
       } else {
-        if (exportAttributes_ != null && exportAttributes_.Count > 0) {
-          if (exportAttributes_.Contains(attributeTypeSymbol.ToString())) {
+        if (Setting.ExportAttributes != null && Setting.ExportAttributes.Count > 0) {
+          if (Setting.ExportAttributes.Contains(attributeTypeSymbol.ToString())) {
             return true;
           }
         }
@@ -245,6 +249,15 @@ namespace CSharpLua {
         }
       }
       return false;
+    }
+
+    internal bool IsFromLuaModule(ISymbol symbol) {
+      return symbol.IsFromCode() || IsFromModuleOnly(symbol);
+    }
+
+    private bool IsFromModuleOnly(ISymbol symbol) {
+      var luaModuleLibs = Setting.LuaModuleLibs;
+      return luaModuleLibs != null && luaModuleLibs.Contains(symbol.ContainingAssembly.Name);
     }
 
     private void CheckExportEnums() {
@@ -543,7 +556,7 @@ namespace CSharpLua {
         }
       }
 
-      if (!symbol.IsFromCode()) {
+      if (!IsFromLuaModule(symbol)) {
         return GetSymbolBaseName(symbol);
       }
 
@@ -578,7 +591,6 @@ namespace CSharpLua {
           }
         }
         if (index > 0) {
-          Contract.Assert(member.IsFromCode());
           ISymbol refactorSymbol = member;
           Utility.CheckOriginalDefinition(ref refactorSymbol);
           refactorNames_.Add(refactorSymbol);
@@ -705,7 +717,6 @@ namespace CSharpLua {
     }
 
     private void AddSimilarNameMembers(INamedTypeSymbol typeSymbol, List<string> names, List<ISymbol> outList, bool isWithoutPrivate = false) {
-      Contract.Assert(typeSymbol.IsFromCode());
       foreach (var member in typeSymbol.GetMembers()) {
         if (member.IsOverride) {
           var overriddenSymbol = member.OverriddenSymbol();
@@ -1089,7 +1100,9 @@ namespace CSharpLua {
     private Dictionary<ISymbol, HashSet<ISymbol>> implicitInterfaceImplementations_ = new Dictionary<ISymbol, HashSet<ISymbol>>();
     private Dictionary<INamedTypeSymbol, Dictionary<ISymbol, ISymbol>> implicitInterfaceTypes_ = new Dictionary<INamedTypeSymbol, Dictionary<ISymbol, ISymbol>>();
     private Dictionary<IPropertySymbol, bool> isFieldPropertys_ = new Dictionary<IPropertySymbol, bool>();
+    private Dictionary<IEventSymbol, bool> isFieldEvents_ = new Dictionary<IEventSymbol, bool>();
     private HashSet<INamedTypeSymbol> typesOfExtendSelf_ = new HashSet<INamedTypeSymbol>();
+    private Dictionary<ISymbol, bool> isMoreThanLocalVariables_ = new Dictionary<ISymbol, bool>();
 
     private sealed class PretreatmentChecker : CSharpSyntaxWalker {
       private LuaSyntaxGenerator generator_;
@@ -1270,25 +1283,123 @@ namespace CSharpLua {
       return implicitInterfaceImplementations_.ContainsKey(symbol);
     }
 
-    internal bool IsPropertyField(IPropertySymbol symbol) {
-      if (!isFieldPropertys_.TryGetValue(symbol, out bool isAutoField)) {
-        bool? isMateField = XmlMetaProvider.IsPropertyField(symbol);
-        if (isMateField.HasValue) {
-          isAutoField = isMateField.Value;
-        } else {
-          if (IsImplicitInterfaceImplementation(symbol)) {
-            isAutoField = false;
-          } else {
-            isAutoField = symbol.IsPropertyField();
+    private bool IsModuleAutoField(ISymbol symbol) {
+      var method = symbol.Kind == SymbolKind.Property ? ((IPropertySymbol)symbol).GetMethod : ((IEventSymbol)symbol).AddMethod;
+      return method != null && method.GetAttributes().HasCompilerGeneratedAttribute();
+    }
+
+    private bool IsPropertyFieldInternal(IPropertySymbol symbol) {
+      if (symbol.IsOverridable() || symbol.IsInterfaceImplementation()) {
+        return false;
+      }
+
+      if (IsFromModuleOnly(symbol)) {
+        return IsModuleAutoField(symbol);
+      }
+
+      if (symbol.IsFromAssembly()) {
+        return false;
+      }
+
+      if (symbol.IsProtobufNetSpecialProperty()) {
+        return true;
+      }
+
+      var syntaxReference = symbol.DeclaringSyntaxReferences.FirstOrDefault();
+      if (syntaxReference != null) {
+        var node = syntaxReference.GetSyntax();
+        switch (node.Kind()) {
+          case SyntaxKind.PropertyDeclaration: {
+            var property = (PropertyDeclarationSyntax)node;
+            bool hasGet = false;
+            bool hasSet = false;
+            if (property.AccessorList != null) {
+              foreach (var accessor in property.AccessorList.Accessors) {
+                if (accessor.Body != null) {
+                  if (accessor.IsKind(SyntaxKind.GetAccessorDeclaration)) {
+                    Contract.Assert(!hasGet);
+                    hasGet = true;
+                  } else {
+                    Contract.Assert(!hasSet);
+                    hasSet = true;
+                  }
+                }
+              }
+            } else {
+              Contract.Assert(!hasGet);
+              hasGet = true;
+            }
+            bool isField = !hasGet && !hasSet;
+            if (isField) {
+              var documentTrivia = property.GetLeadingTrivia().FirstOrDefault(i => i.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
+              if (documentTrivia != null && documentTrivia.HasNoFiledAttribute()) {
+                isField = false;
+              }
+            }
+            return isField;
+          }
+          case SyntaxKind.IndexerDeclaration: {
+            return false;
+          }
+          case SyntaxKind.AnonymousObjectMemberDeclarator: {
+            return true;
+          }
+          default: {
+            throw new InvalidOperationException();
           }
         }
-        isFieldPropertys_.Add(symbol, isAutoField);
       }
-      return isAutoField;
+      return false;
+    }
+
+    internal bool IsPropertyField(IPropertySymbol symbol) {
+      if (!isFieldPropertys_.TryGetValue(symbol, out bool isField)) {
+        bool? isMateField = XmlMetaProvider.IsPropertyField(symbol);
+        if (isMateField.HasValue) {
+          isField = isMateField.Value;
+        } else {
+          if (IsImplicitInterfaceImplementation(symbol)) {
+            isField = false;
+          } else {
+            isField = IsPropertyFieldInternal(symbol);
+          }
+        }
+        isFieldPropertys_.Add(symbol, isField);
+      }
+      return isField;
+    }
+
+    private bool IsEventFiledInternal(IEventSymbol symbol) {
+      if (symbol.IsOverridable() || symbol.IsInterfaceImplementation()) {
+        return false;
+      }
+
+      if (IsFromModuleOnly(symbol)) {
+        return IsModuleAutoField(symbol);
+      }
+
+      if (symbol.IsFromAssembly()) {
+        return false;
+      }
+
+      var syntaxReference = symbol.DeclaringSyntaxReferences.FirstOrDefault();
+      if (syntaxReference != null) {
+        bool isField = syntaxReference.GetSyntax().IsKind(SyntaxKind.VariableDeclarator);
+        return isField;
+      }
+      return false;
     }
 
     internal bool IsEventFiled(IEventSymbol symbol) {
-      return !IsImplicitInterfaceImplementation(symbol) && symbol.IsEventFiled();
+      if (!isFieldEvents_.TryGetValue(symbol, out bool isField)) {
+        if (IsImplicitInterfaceImplementation(symbol)) {
+          isField = false;
+        } else {
+          isField = IsEventFiledInternal(symbol);
+        }
+        isFieldEvents_.Add(symbol, isField);
+      }
+      return isField;
     }
 
     internal bool IsPropertyFieldOrEventFiled(ISymbol symbol) {
@@ -1298,6 +1409,74 @@ namespace CSharpLua {
         return IsEventFiled(eventSymbol);
       }
       return false;
+    }
+
+    public bool IsMoreThanLocalVariables(ISymbol symbol) {
+      Contract.Assert(symbol.IsFromCode());
+      if (!isMoreThanLocalVariables_.TryGetValue(symbol, out bool isMoreThanLocalVariables)) {
+        const int kMaxLocalVariablesCount = 195;
+        var methods = symbol.ContainingType.GetMembers().Where(i => {
+          switch (i.Kind) {
+            case SymbolKind.Method: {
+              var method = (IMethodSymbol)i;
+              switch (method.MethodKind) {
+                case MethodKind.Constructor: {
+                  return false;
+                }
+                case MethodKind.PropertyGet:
+                case MethodKind.PropertySet: {
+                  if (IsPropertyField((IPropertySymbol)method.AssociatedSymbol)) {
+                    return false;
+                  }
+                  break;
+                }
+                case MethodKind.EventAdd:
+                case MethodKind.EventRaise:
+                case MethodKind.EventRemove: {
+                  if (IsEventFiled((IEventSymbol)method.AssociatedSymbol)) {
+                    return false;
+                  }
+                  break;
+                }
+              }
+
+              return true;
+            }
+            case SymbolKind.Field when !i.IsImplicitlyDeclared: {
+              var field = (IFieldSymbol)i;
+              if (!field.IsConst) {
+                return field.IsStatic && (field.IsPrivate() || field.IsReadOnly);
+              }
+
+              if (field.Type.SpecialType == SpecialType.System_String) {
+                if (((string)field.ConstantValue).Length > LuaSyntaxNodeTransform.kStringConstInlineCount) {
+                  return true;
+                }
+              }
+
+              break;
+            }
+          }
+          return false;
+        }).ToList();
+
+        int index = 0;
+        switch (symbol.Kind) {
+          case SymbolKind.Method: {
+            index = methods.FindIndex(i => i == symbol);
+            break;
+          }
+          case SymbolKind.Property:
+          case SymbolKind.Event: {
+            index = methods.FindIndex(i => i.Kind == SymbolKind.Method && ((IMethodSymbol)i).AssociatedSymbol == symbol) + 1;
+            break;
+          }
+        }
+
+        isMoreThanLocalVariables = index + symbol.ContainingType.Constructors.Length > kMaxLocalVariablesCount;
+        isMoreThanLocalVariables_.Add(symbol, isMoreThanLocalVariables);
+      }
+      return isMoreThanLocalVariables;
     }
 
     private IEnumerable<ISymbol> AllInterfaceImplementations(ISymbol symbol) {
@@ -1380,7 +1559,7 @@ namespace CSharpLua {
       }
       return false;
     }
-    
+
     private static bool IsInitFieldExists<T>(IEnumerable<T> fieldSymbols, Func<T, ITypeSymbol> fieldTypeFunc, Func<SyntaxNode, ExpressionSyntax> fieldValueFunc) where T : ISymbol {
       foreach (var field in fieldSymbols) {
         var fieldType = fieldTypeFunc(field);

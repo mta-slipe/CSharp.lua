@@ -27,7 +27,7 @@ using CSharpLua.LuaAst;
 
 namespace CSharpLua {
   public sealed partial class LuaSyntaxNodeTransform : CSharpSyntaxVisitor<LuaSyntaxNode> {
-    private const int kStringConstInlineCount = 15;
+    public const int kStringConstInlineCount = 15;
 
     private sealed class MethodInfo {
       public IMethodSymbol Symbol { get; }
@@ -111,7 +111,7 @@ namespace CSharpLua {
 
     private bool IsLuaNewest {
       get {
-        return generator_.Setting.IsNewest;
+        return !generator_.Setting.IsClassic;
       }
     }
 
@@ -539,12 +539,15 @@ namespace CSharpLua {
       public bool IsMetadata => (Document != null && Document.HasMetadataAttribute);
     }
 
-    private void AddMethodMetaData(MethodDeclarationResult result) {
+    private void AddMethodMetaData(MethodDeclarationResult result, bool isMoreThanLocalVariables = false) {
       var table = new LuaTableExpression() { IsSingleLine = true };
       table.Add(new LuaStringLiteralExpressionSyntax(result.Symbol.Name));
       table.Add(result.Symbol.GetMetaDataAttributeFlags());
-      table.Add(result.Name);
-
+      if (isMoreThanLocalVariables) {
+        table.Add(new LuaMemberAccessExpressionSyntax(LuaIdentifierNameSyntax.MorenManyLocalVarTempTable, result.Name));
+      } else {
+        table.Add(result.Name);
+      }
       var parameters = result.Symbol.Parameters.Select(i => GetTypeNameOfMetadata(i.Type)).ToList();
       if (!result.Symbol.ReturnsVoid) {
         parameters.Add(GetTypeNameOfMetadata(result.Symbol.ReturnType));
@@ -670,9 +673,10 @@ namespace CSharpLua {
       if (!node.Modifiers.IsAbstract() && !node.Modifiers.IsExtern()) {
         var result = BuildMethodDeclaration(node, node.AttributeLists, node.ParameterList, node.TypeParameterList, node.Body, node.ExpressionBody, node.ReturnType);
         if (!result.IsIgnore) {
-          CurType.AddMethod(result.Name, result.Function, result.IsPrivate, result.Document);
+          bool isMoreThanLocalVariables = IsMoreThanLocalVariables(result.Symbol);
+          CurType.AddMethod(result.Name, result.Function, result.IsPrivate, result.Document, isMoreThanLocalVariables);
           if (IsCurTypeExportMetadataAll || result.Attributes.Count > 0 || result.IsMetadata) {
-            AddMethodMetaData(result);
+            AddMethodMetaData(result, isMoreThanLocalVariables);
           }
         }
         return result.Function;
@@ -941,6 +945,7 @@ namespace CSharpLua {
         if (node.AccessorList != null) {
           foreach (var accessor in node.AccessorList.Accessors) {
             if (accessor.Body != null || accessor.ExpressionBody != null) {
+              var accessorSymbol = semanticModel_.GetDeclaredSymbol(accessor);
               bool isGet = accessor.IsKind(SyntaxKind.GetAccessorDeclaration);
               var functionExpression = new LuaFunctionExpressionSyntax();
               if (!isStatic) {
@@ -962,7 +967,7 @@ namespace CSharpLua {
               }
               PopFunction();
               var name = new LuaPropertyOrEventIdentifierNameSyntax(true, propertyName);
-              CurType.AddMethod(name, functionExpression, isPrivate);
+              CurType.AddMethod(name, functionExpression, isPrivate, null, IsMoreThanLocalVariables(accessorSymbol));
 
               var methodAttributes = BuildAttributes(accessor.AttributeLists);
               if (isGet) {

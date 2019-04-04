@@ -126,6 +126,11 @@ namespace CSharpLua {
       }
     }
 
+    public static int IndexOf<T>(this IEnumerable<T> source, T value) {
+      var comparer = EqualityComparer<T>.Default;
+      return source.IndexOf(i => comparer.Equals(i, value));
+    }
+
     public static int IndexOf<T>(this IEnumerable<T> source, Predicate<T> match) {
       int index = 0;
       foreach (var item in source) {
@@ -190,7 +195,7 @@ namespace CSharpLua {
     public static string[] Split(string s, bool isPath = true) {
       HashSet<string> list = new HashSet<string>();
       if (!string.IsNullOrEmpty(s)) {
-        string[] array = s.Split(';');
+        string[] array = s.Split(';', ',');
         foreach (string i in array) {
           list.Add(isPath ? GetCurrentDirectory(i) : i);
         }
@@ -206,6 +211,13 @@ namespace CSharpLua {
       int pos = s.LastIndexOf('.');
       if (pos != -1) {
         return s.Substring(pos + 1);
+      }
+      return s;
+    }
+
+    public static string TrimEnd(this string s, string v) {
+      if (s.EndsWith(v)) {
+        return s.Remove(s.Length - v.Length);
       }
       return s;
     }
@@ -368,67 +380,7 @@ namespace CSharpLua {
       }
     }
 
-    public static bool IsPropertyField(this IPropertySymbol symbol) {
-      if (!symbol.IsFromCode() || symbol.IsOverridable()) {
-        return false;
-      }
-
-      if (symbol.IsProtobufNetSpecialProperty()) {
-        return true;
-      }
-
-      var syntaxReference = symbol.DeclaringSyntaxReferences.FirstOrDefault();
-      if (syntaxReference != null) {
-        var node = syntaxReference.GetSyntax();
-        switch (node.Kind()) {
-          case SyntaxKind.PropertyDeclaration: {
-            var property = (PropertyDeclarationSyntax)node;
-            bool hasGet = false;
-            bool hasSet = false;
-            if (property.AccessorList != null) {
-              foreach (var accessor in property.AccessorList.Accessors) {
-                if (accessor.Body != null) {
-                  if (accessor.IsKind(SyntaxKind.GetAccessorDeclaration)) {
-                    Contract.Assert(!hasGet);
-                    hasGet = true;
-                  } else {
-                    Contract.Assert(!hasSet);
-                    hasSet = true;
-                  }
-                }
-              }
-            } else {
-              Contract.Assert(!hasGet);
-              hasGet = true;
-            }
-            bool isField = !hasGet && !hasSet;
-            if (isField) {
-              if (symbol.IsInterfaceImplementation()) {
-                isField = false;
-              } else {
-                var documentTrivia = property.GetLeadingTrivia().FirstOrDefault(i => i.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
-                if (documentTrivia != null && documentTrivia.HasNoFiledAttribute()) {
-                  isField = false;
-                }
-              }
-            }
-            return isField;
-          }
-          case SyntaxKind.IndexerDeclaration: {
-            return false;
-          }
-          case SyntaxKind.AnonymousObjectMemberDeclarator: {
-            return true;
-          }
-          default: {
-            throw new InvalidOperationException();
-          }
-        }
-      }
-      return false;
-    }
-
-    private static bool HasNoFiledAttribute(this SyntaxTrivia trivia) {
+    public static bool HasNoFiledAttribute(this SyntaxTrivia trivia) {
       return trivia.ToString().Contains(LuaDocumentStatement.kNoField);
     }
 
@@ -443,24 +395,6 @@ namespace CSharpLua {
         if (documentTrivia != null && documentTrivia.HasMetadataAttribute()) {
           return true;
         }
-      }
-      return false;
-    }
-
-    public static bool IsEventFiled(this IEventSymbol symbol) {
-      if (!symbol.IsFromCode() || symbol.IsOverridable()) {
-        return false;
-      }
-
-      var syntaxReference = symbol.DeclaringSyntaxReferences.FirstOrDefault();
-      if (syntaxReference != null) {
-        bool isField = syntaxReference.GetSyntax().IsKind(SyntaxKind.VariableDeclarator);
-        if (isField) {
-          if (symbol.IsInterfaceImplementation()) {
-            isField = false;
-          }
-        }
-        return isField;
       }
       return false;
     }
@@ -642,28 +576,6 @@ namespace CSharpLua {
       }
       return false;
     }
-
-    public static int GetConstructorIndex(this IMethodSymbol symbool) {
-      Contract.Assert(symbool.MethodKind == MethodKind.Constructor);
-      if (symbool.ContainingType.IsFromCode()) {
-        var typeSymbol = (INamedTypeSymbol)symbool.ReceiverType;
-        var ctors = typeSymbol.Constructors.Where(i => !i.IsStatic).ToList();
-        if (ctors.Count > 1) {
-          int firstCtorIndex = ctors.IndexOf(i => i.Parameters.IsEmpty);
-          if (firstCtorIndex != -1 && firstCtorIndex != 0) {
-            var firstCtor = ctors[firstCtorIndex];
-            ctors.Remove(firstCtor);
-            ctors.Insert(0, firstCtor);
-          }
-          int index = ctors.IndexOf(symbool);
-          Contract.Assert(index != -1);
-          int ctroCounter = index + 1;
-          return ctroCounter;
-        }
-      }
-      return 0;
-    }
-
 
     public static bool IsExtendSelf(INamedTypeSymbol typeSymbol, INamedTypeSymbol baseTypeSymbol) {
       if (baseTypeSymbol.IsGenericType) {
@@ -1021,6 +933,14 @@ namespace CSharpLua {
       return symbol.Name == "CompilerServices" && symbol.ContainingNamespace.Name == "Runtime" && symbol.ContainingNamespace.ContainingNamespace.Name == "System";
     }
 
+    public static bool IsCompilerGeneratedAttribute(this INamedTypeSymbol symbol) {
+      return symbol.Name == "CompilerGeneratedAttribute" && symbol.ContainingNamespace.IsRuntimeCompilerServices();
+    }
+
+    public static bool HasCompilerGeneratedAttribute(this ImmutableArray<AttributeData> attrs) {
+      return attrs.Any(i => i.AttributeClass.IsCompilerGeneratedAttribute());
+    }
+
     public static string GetMetaDataAttributeFlags(this ISymbol symbol, PropertyMethodKind propertyMethodKind = 0) {
       const int kParametersMaxCount = 256;
 
@@ -1063,6 +983,48 @@ namespace CSharpLua {
         }
       }
       return $"0x{flags:X}";
+    }
+
+    private static void FillNamespaceName(StringBuilder sb, INamedTypeSymbol typeSymbol) {
+      string namespaceName;
+      var namespaceSymbol = typeSymbol.ContainingNamespace;
+      if (namespaceSymbol.IsGlobalNamespace) {
+        namespaceName = string.Empty;
+      } else {
+        namespaceName = namespaceSymbol.ToString();
+      }
+      if (namespaceName.Length > 0) {
+        sb.Append(namespaceName);
+        sb.Append('.');
+      }
+    }
+
+    private static void FillExternalTypeName(StringBuilder sb, INamedTypeSymbol symbol) {
+      var externalType = symbol.ContainingType;
+      if (externalType != null) {
+        FillExternalTypeName(sb, externalType);
+        sb.Append(externalType.Name);
+        int typeParametersCount = externalType.TypeParameters.Length;
+        if (typeParametersCount > 0) {
+          sb.Append('`');
+          sb.Append(typeParametersCount);
+        }
+        sb.Append('+');
+      } else {
+        FillNamespaceName(sb, symbol);
+      }
+    }
+
+    public static string GetAssemblyQualifiedName(this INamedTypeSymbol symbol) {
+      StringBuilder sb = new StringBuilder();
+      FillExternalTypeName(sb, symbol);
+      sb.Append(symbol.Name);
+      int typeParametersCount = symbol.TypeParameters.Length;
+      if (typeParametersCount > 0) {
+        sb.Append('`');
+        sb.Append(typeParametersCount);
+      }
+      return sb.ToString();
     }
 
     public static bool IsNil(this LuaExpressionSyntax expression) {

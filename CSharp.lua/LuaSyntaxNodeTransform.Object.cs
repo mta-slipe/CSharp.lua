@@ -313,7 +313,7 @@ namespace CSharpLua {
       bool isEmptyCtor = false;
       if (node.Initializer != null) {
         var initializerSymbol = (IMethodSymbol)semanticModel_.GetSymbolInfo(node.Initializer).Symbol;
-        int ctroIndex = initializerSymbol.GetConstructorIndex();
+        int ctroIndex = GetConstructorIndex(initializerSymbol);
         LuaInvocationExpressionSyntax otherCtorInvoke;
         if (node.Initializer.IsKind(SyntaxKind.ThisConstructorInitializer)) {
           Contract.Assert(ctroIndex != 0);
@@ -366,8 +366,8 @@ namespace CSharpLua {
         }
 
         if (IsCurTypeExportMetadataAll || attributes.Count > 0 || symbol.HasMetadataAttribute()) {
-          int ctorIndex = symbol.GetConstructorIndex();
-          LuaIdentifierNameSyntax name = ctorIndex == 0 ? LuaIdentifierNameSyntax.Nil : LuaSyntaxNode.GetCtorNameString(ctorIndex);
+          int ctorIndex = GetConstructorIndex(symbol);
+          var name = ctorIndex == 0 ? LuaIdentifierNameSyntax.Nil : LuaSyntaxNode.GetCtorNameString(ctorIndex);
           AddMethodMetaData(new MethodDeclarationResult() {
             Symbol = symbol,
             Name = name,
@@ -754,7 +754,7 @@ namespace CSharpLua {
           }
         case SymbolKind.Event: {
             var eventSymbol = (IEventSymbol)symbol;
-            if (!eventSymbol.IsEventFiled()) {
+            if (!IsEventFiled(eventSymbol)) {
               useType = CheckBaseVisitType(parent, eventSymbol, i => i.OverriddenEvent);
             }
             break;
@@ -973,8 +973,7 @@ namespace CSharpLua {
       var comments = BuildDocumentationComment(node);
       LuaBlockSyntax block = (LuaBlockSyntax)node.Body.Accept(this);
       function.AddStatements(block.Statements);
-      CurType.AddMethod(name, function, isPrivate, comments);
-
+      CurType.AddMethod(name, function, isPrivate, comments, IsMoreThanLocalVariables(symbol));
       PopFunction();
       methodInfos_.Pop();
     }
