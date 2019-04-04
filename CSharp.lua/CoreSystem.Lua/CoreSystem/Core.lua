@@ -1246,10 +1246,14 @@ function System.init(namelist, conf)
     end
   end
 
-  modules = {}
-  usings = {}
+  -- modules = {}
+  -- usings = {}
 	metadatas = nil
 	curCacheName = nil
 end
 
-System.config = config or {}
+System.config = config or {
+	time = function()
+		return getRealTime().timestamp
+	end
+}
