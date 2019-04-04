@@ -703,10 +703,17 @@ namespace CSharpLua {
       var names = GetSymbolNames(symbol);
       var rootType = symbol.ContainingType;
       var curTypeSymbol = rootType;
+      bool hasAssemblyBase = false;
       while (true) {
         AddSimilarNameMembers(curTypeSymbol, names, members, rootType != curTypeSymbol);
         var baseTypeSymbol = curTypeSymbol.BaseType;
-        if (baseTypeSymbol != null && baseTypeSymbol.IsFromCode()) {
+        if (baseTypeSymbol != null) {
+          if (baseTypeSymbol.IsFromAssembly()) {
+            if (baseTypeSymbol.IsSystemObjectOrValueType() || hasAssemblyBase) {
+              break;
+            }
+            hasAssemblyBase = true;
+          }
           curTypeSymbol = baseTypeSymbol;
         } else {
           break;
@@ -1543,7 +1550,7 @@ namespace CSharpLua {
     }
 
     internal bool IsBaseExplicitCtorExists(INamedTypeSymbol baseType) {
-      while (baseType != null && baseType.SpecialType != SpecialType.System_Object && baseType.SpecialType != SpecialType.System_ValueType) {
+      while (baseType != null && !baseType.IsSystemObjectOrValueType()) {
         var constructor = baseType.Constructors.FirstOrDefault(i => !i.IsStatic);
         if (constructor != null) {
           if (!constructor.IsImplicitlyDeclared) {
