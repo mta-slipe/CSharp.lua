@@ -39,6 +39,7 @@ namespace CSharpLua {
 
     public bool IsExportMetadata { get; set; }
     public bool IsModule { get; set; }
+    public bool IsInlineSimpleProperty { get; set; }
 
     public Compiler(string folder, string output, string lib, string meta, string csc, bool isClassic, string atts) {
       folder_ = folder;
@@ -122,7 +123,7 @@ namespace CSharpLua {
       var parseOptions = commandLineArguments.ParseOptions.WithLanguageVersion(LanguageVersion.Latest).WithDocumentationMode(DocumentationMode.Parse);
       var syntaxTrees = codes.Select(code => CSharpSyntaxTree.ParseText(code.Text, parseOptions, code.Path));
       var references = libs.Select(i => MetadataReference.CreateFromFile(i));
-      return new LuaSyntaxGenerator(syntaxTrees, references, commandLineArguments.CompilationOptions, metas, setting);
+      return new LuaSyntaxGenerator(syntaxTrees, references, commandLineArguments, metas, setting);
     }
 
     public void Compile() {
@@ -136,6 +137,7 @@ namespace CSharpLua {
         Attributes = attributes_,
         LuaModuleLibs = new HashSet<string>(luaModuleLibs),
         IsModule = IsModule,
+        IsInlineSimpleProperty = IsInlineSimpleProperty,
       };
       var generator = Build(cscArguments_, codes, libs, Metas, setting);
       generator.Generate(output_);

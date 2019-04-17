@@ -63,21 +63,18 @@ namespace CSharpLua.LuaAst {
   }
 
   public sealed class LuaReturnStatementSyntax : LuaBaseReturnStatementSyntax {
-    public LuaExpressionSyntax Expression { get; }
-
-    public LuaReturnStatementSyntax(LuaExpressionSyntax expression = null) {
-      Expression = expression;
-    }
-
-    internal override void Render(LuaRenderer renderer) {
-      renderer.Render(this);
-    }
-  }
-
-  public sealed class LuaMultipleReturnStatementSyntax : LuaBaseReturnStatementSyntax {
     public readonly LuaSyntaxList<LuaExpressionSyntax> Expressions = new LuaSyntaxList<LuaExpressionSyntax>();
 
-    public LuaMultipleReturnStatementSyntax(IEnumerable<LuaExpressionSyntax> expressions = null) {
+    public LuaReturnStatementSyntax() {
+    }
+
+    public LuaReturnStatementSyntax(LuaExpressionSyntax expression) {
+      if (expression != null) {
+        Expressions.Add(expression);
+      }
+    }
+
+    public LuaReturnStatementSyntax(IEnumerable<LuaExpressionSyntax> expressions) {
       if (expressions != null) {
         Expressions.AddRange(expressions);
       }
@@ -216,8 +213,6 @@ namespace CSharpLua.LuaAst {
 
   public sealed class LuaDocumentStatement : LuaStatementSyntax {
     private const string kAttributePrefix = "@CSharpLua.";
-    public const string kNoField = kAttributePrefix + nameof(AttributeFlags.NoField);
-    public const string kMetadata = kAttributePrefix + nameof(AttributeFlags.Metadata);
 
     [Flags]
     public enum AttributeFlags {
@@ -312,6 +307,10 @@ namespace CSharpLua.LuaAst {
 
     public void UnIgnore() {
       UnAttribute(AttributeFlags.Ignore);
+    }
+
+    public static string ToString(AttributeFlags attribute) {
+      return kAttributePrefix + attribute.ToString();
     }
 
     internal override void Render(LuaRenderer renderer) {

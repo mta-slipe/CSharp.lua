@@ -61,6 +61,7 @@ namespace CSharpLua {
       public bool IsModule { get; set; }
       public HashSet<string> ExportAttributes { get; private set; }
       public HashSet<string> LuaModuleLibs;
+      public bool IsInlineSimpleProperty { get; set; }
 
       public SettingInfo() {
         Indent = 2;
@@ -96,14 +97,15 @@ namespace CSharpLua {
 
     private CSharpCompilation compilation_;
     public XmlMetaProvider XmlMetaProvider { get; }
+    public CSharpCommandLineArguments CommandLineArguments { get; }
     public SettingInfo Setting { get; set; }
-    private HashSet<string> exportEnums_ = new HashSet<string>();
-    private HashSet<INamedTypeSymbol> ignoreExportTypes_ = new HashSet<INamedTypeSymbol>();
-    private HashSet<ISymbol> forcePublicSymbols_ = new HashSet<ISymbol>();
-    private List<LuaEnumDeclarationSyntax> enumDeclarations_ = new List<LuaEnumDeclarationSyntax>();
-    private Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>> partialTypes_ = new Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>>();
+    private readonly HashSet<string> exportEnums_ = new HashSet<string>();
+    private readonly HashSet<INamedTypeSymbol> ignoreExportTypes_ = new HashSet<INamedTypeSymbol>();
+    private readonly HashSet<ISymbol> forcePublicSymbols_ = new HashSet<ISymbol>();
+    private readonly List<LuaEnumDeclarationSyntax> enumDeclarations_ = new List<LuaEnumDeclarationSyntax>();
+    private readonly Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>> partialTypes_ = new Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>>();
+    private readonly HashSet<string> monoBehaviourSpeicalMethodNames_;
     private IMethodSymbol mainEntryPoint_;
-    private HashSet<string> monoBehaviourSpeicalMethodNames_;
     private INamedTypeSymbol monoBehaviourTypeSymbol_;
 
     static LuaSyntaxGenerator() {
@@ -113,8 +115,8 @@ namespace CSharpLua {
       };
     }
 
-    public LuaSyntaxGenerator(IEnumerable<SyntaxTree> syntaxTrees, IEnumerable<MetadataReference> references, CSharpCompilationOptions options, IEnumerable<string> metas, SettingInfo setting) {
-      CSharpCompilation compilation = CSharpCompilation.Create("_", syntaxTrees, references, options.WithOutputKind(OutputKind.DynamicallyLinkedLibrary));
+    public LuaSyntaxGenerator(IEnumerable<SyntaxTree> syntaxTrees, IEnumerable<MetadataReference> references, CSharpCommandLineArguments arguments, IEnumerable<string> metas, SettingInfo setting) {
+      CSharpCompilation compilation = CSharpCompilation.Create("_", syntaxTrees, references, arguments.CompilationOptions.WithOutputKind(OutputKind.DynamicallyLinkedLibrary));
       using (MemoryStream ms = new MemoryStream()) {
         EmitResult result = compilation.Emit(ms);
         if (!result.Success) {
@@ -125,6 +127,7 @@ namespace CSharpLua {
       }
       compilation_ = compilation;
       XmlMetaProvider = new XmlMetaProvider(metas);
+      CommandLineArguments = arguments;
       Setting = setting;
       if (compilation.ReferencedAssemblyNames.Any(i => i.Name.Contains("UnityEngine"))) {
         monoBehaviourTypeSymbol_ = compilation.GetTypeByMetadataName("UnityEngine.MonoBehaviour");
@@ -259,6 +262,22 @@ namespace CSharpLua {
     private bool IsFromModuleOnly(ISymbol symbol) {
       var luaModuleLibs = Setting.LuaModuleLibs;
       return luaModuleLibs != null && luaModuleLibs.Contains(symbol.ContainingAssembly.Name);
+    }
+
+    internal bool IsConditionalAttributeIgnore(IMethodSymbol symbol) {
+      if (symbol.ReturnsVoid) {
+        foreach (var attrbute in symbol.GetAttributes()) {
+          var attributeSymbol = attrbute.AttributeClass;
+          if (attributeSymbol.IsConditionalAttribute()) {
+            string conditionString = (string)attrbute.ConstructorArguments.First().Value;
+            bool has = CommandLineArguments.ParseOptions.PreprocessorSymbolNames.Contains(conditionString);
+            if (has) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
     }
 
     private void CheckExportEnums() {
@@ -458,13 +477,13 @@ namespace CSharpLua {
 
     #region     // member name refactor
 
-    private Dictionary<ISymbol, LuaSymbolNameSyntax> memberNames_ = new Dictionary<ISymbol, LuaSymbolNameSyntax>();
-    private Dictionary<INamedTypeSymbol, HashSet<string>> typeNameUseds_ = new Dictionary<INamedTypeSymbol, HashSet<string>>();
-    private HashSet<ISymbol> refactorNames_ = new HashSet<ISymbol>();
-    private Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>> extends_ = new Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>>();
-    private List<INamedTypeSymbol> types_ = new List<INamedTypeSymbol>();
-    private Dictionary<ISymbol, LuaSymbolNameSyntax> propertyOrEvnetInnerFieldNames_ = new Dictionary<ISymbol, LuaSymbolNameSyntax>();
-    private Dictionary<ISymbol, string> memberIllegalNames_ = new Dictionary<ISymbol, string>();
+    private readonly Dictionary<ISymbol, LuaSymbolNameSyntax> memberNames_ = new Dictionary<ISymbol, LuaSymbolNameSyntax>();
+    private readonly Dictionary<INamedTypeSymbol, HashSet<string>> typeNameUseds_ = new Dictionary<INamedTypeSymbol, HashSet<string>>();
+    private readonly HashSet<ISymbol> refactorNames_ = new HashSet<ISymbol>();
+    private readonly Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>> extends_ = new Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>>();
+    private readonly List<INamedTypeSymbol> types_ = new List<INamedTypeSymbol>();
+    private readonly Dictionary<ISymbol, LuaSymbolNameSyntax> propertyOrEvnetInnerFieldNames_ = new Dictionary<ISymbol, LuaSymbolNameSyntax>();
+    private readonly Dictionary<ISymbol, string> memberIllegalNames_ = new Dictionary<ISymbol, string>();
     internal bool IsNeedRefactorName(ISymbol symbol) => refactorNames_.Contains(symbol);
 
     internal void AddTypeSymbol(INamedTypeSymbol typeSymbol) {
@@ -1105,16 +1124,17 @@ namespace CSharpLua {
     }
 
     #endregion
-    private Dictionary<ISymbol, HashSet<ISymbol>> implicitInterfaceImplementations_ = new Dictionary<ISymbol, HashSet<ISymbol>>();
-    private Dictionary<INamedTypeSymbol, Dictionary<ISymbol, ISymbol>> implicitInterfaceTypes_ = new Dictionary<INamedTypeSymbol, Dictionary<ISymbol, ISymbol>>();
-    private Dictionary<IPropertySymbol, bool> isFieldPropertys_ = new Dictionary<IPropertySymbol, bool>();
-    private Dictionary<IEventSymbol, bool> isFieldEvents_ = new Dictionary<IEventSymbol, bool>();
-    private HashSet<INamedTypeSymbol> typesOfExtendSelf_ = new HashSet<INamedTypeSymbol>();
-    private Dictionary<ISymbol, bool> isMoreThanLocalVariables_ = new Dictionary<ISymbol, bool>();
+    private readonly Dictionary<ISymbol, HashSet<ISymbol>> implicitInterfaceImplementations_ = new Dictionary<ISymbol, HashSet<ISymbol>>();
+    private readonly Dictionary<INamedTypeSymbol, Dictionary<ISymbol, ISymbol>> implicitInterfaceTypes_ = new Dictionary<INamedTypeSymbol, Dictionary<ISymbol, ISymbol>>();
+    private readonly Dictionary<IPropertySymbol, bool> isFieldPropertys_ = new Dictionary<IPropertySymbol, bool>();
+    private readonly Dictionary<IEventSymbol, bool> isFieldEvents_ = new Dictionary<IEventSymbol, bool>();
+    private readonly HashSet<INamedTypeSymbol> typesOfExtendSelf_ = new HashSet<INamedTypeSymbol>();
+    private readonly Dictionary<ISymbol, bool> isMoreThanLocalVariables_ = new Dictionary<ISymbol, bool>();
+    private readonly HashSet<ISymbol> inlineSymbols_ = new HashSet<ISymbol>();
 
     private sealed class PretreatmentChecker : CSharpSyntaxWalker {
-      private LuaSyntaxGenerator generator_;
-      private HashSet<INamedTypeSymbol> classTypes_ = new HashSet<INamedTypeSymbol>();
+      private readonly LuaSyntaxGenerator generator_;
+      private readonly HashSet<INamedTypeSymbol> classTypes_ = new HashSet<INamedTypeSymbol>();
 
       public PretreatmentChecker(LuaSyntaxGenerator generator) {
         generator_ = generator;
@@ -1339,8 +1359,7 @@ namespace CSharpLua {
             }
             bool isField = !hasGet && !hasSet;
             if (isField) {
-              var documentTrivia = property.GetLeadingTrivia().FirstOrDefault(i => i.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
-              if (documentTrivia != null && documentTrivia.HasNoFiledAttribute()) {
+              if (property.HasCSharpLuaAttribute(LuaDocumentStatement.AttributeFlags.NoField)) {
                 isField = false;
               }
             }
@@ -1487,6 +1506,18 @@ namespace CSharpLua {
       return isMoreThanLocalVariables;
     }
 
+    internal void AddInlineSymbol(IMethodSymbol symbol) {
+      if (symbol.MethodKind == MethodKind.PropertyGet) {
+        inlineSymbols_.Add(symbol.AssociatedSymbol);
+      } else {
+        inlineSymbols_.Add(symbol);
+      }
+    }
+
+    internal bool IsInlineSymbol(ISymbol symbol) {
+      return inlineSymbols_.Contains(symbol);
+    }
+
     private IEnumerable<ISymbol> AllInterfaceImplementations(ISymbol symbol) {
       var interfaceImplementations = symbol.InterfaceImplementations();
       var implicitImplementations = implicitInterfaceImplementations_.GetOrDefault(symbol);
@@ -1610,8 +1641,8 @@ namespace CSharpLua {
 
     #region type and namespace refactor
 
-    private Dictionary<INamespaceSymbol, string> namespaceRefactorNames_ = new Dictionary<INamespaceSymbol, string>();
-    private Dictionary<INamedTypeSymbol, string> typeRefactorNames_ = new Dictionary<INamedTypeSymbol, string>();
+    private readonly Dictionary<INamespaceSymbol, string> namespaceRefactorNames_ = new Dictionary<INamespaceSymbol, string>();
+    private readonly Dictionary<INamedTypeSymbol, string> typeRefactorNames_ = new Dictionary<INamedTypeSymbol, string>();
     private int genericTypeCounter_;
     public bool IsNoneGenericTypeCounter => genericTypeCounter_ == 0;
 

@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 
 namespace CSharpLua.LuaAst {
   public sealed class LuaMemberAccessExpressionSyntax : LuaExpressionSyntax {
-    public LuaExpressionSyntax Expression { get; }
+    public LuaExpressionSyntax Expression { get; private set; }
     public LuaExpressionSyntax Name { get; }
     public string OperatorToken { get; }
 
@@ -37,6 +37,10 @@ namespace CSharpLua.LuaAst {
       get {
         return OperatorToken == Tokens.ObjectColon;
       }
+    }
+
+    public void UpdateExpression(LuaExpressionSyntax expression) {
+      Expression = expression ?? throw new ArgumentNullException(nameof(expression));
     }
 
     internal override void Render(LuaRenderer renderer) {
@@ -63,6 +67,10 @@ namespace CSharpLua.LuaAst {
       Contract.Assert(Expression == null);
       Expression = expression;
       OperatorToken = isObjectColon ? Tokens.ObjectColon : Tokens.Dot;
+    }
+
+    public void Update(LuaExpressionSyntax expression) {
+      Expression = expression;
     }
 
     public bool IsGetOrAdd {

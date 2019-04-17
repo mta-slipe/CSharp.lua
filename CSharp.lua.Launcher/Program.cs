@@ -40,6 +40,7 @@ Options
 -a              : attributes need to export, use ';' to separate, if ""-a"" only, all attributes whill be exported
 -metadata       : export all metadata, use @CSharpLua.Metadata annotations for precise control
 -module         : the currently compiled assembly needs to be referenced, it's useful for multiple module compiled
+-inline-property: inline some single-line properties
 ";
     public static void Main(string[] args) {
       if (args.Length > 0) {
@@ -61,12 +62,14 @@ Options
           if (atts == null && cmds.ContainsKey("-a")) {
             atts = string.Empty;
           }
-          string csc = GetCSCArgument(cmds);
+          string csc = GetCSCArgument(args);
           bool isExportMetadata = cmds.ContainsKey("-metadata");
           bool isModule = cmds.ContainsKey("-module");
+          bool isInlineSimpleProperty = cmds.ContainsKey("-inline-property");
           Compiler c = new Compiler(folder, output, lib, meta, csc, isClassic, atts) {
             IsExportMetadata = isExportMetadata,
             IsModule = isModule,
+            IsInlineSimpleProperty = isInlineSimpleProperty,
           };
           c.Compile();
           Console.WriteLine("all operator success");
@@ -108,11 +111,10 @@ Options
       return argumnets_.Contains(key);
     }
 
-    private static string GetCSCArgument(Dictionary<string, string[]> cmds) {
-      if (cmds.ContainsKey("-csc")) {
-        int index = cmds.Keys.IndexOf(i => i == "-csc");
-        Contract.Assert(index != -1);
-        var remains = cmds.Keys.Skip(index + 1);
+    private static string GetCSCArgument(string[] args) {
+      int index = args.IndexOf("-csc");
+      if (index != -1) {
+        var remains = args.Skip(index + 1);
         int end = remains.IndexOf(IsArgumentKey);
         if (end != -1) {
           remains = remains.Take(end);

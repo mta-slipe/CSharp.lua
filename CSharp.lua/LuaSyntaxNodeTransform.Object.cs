@@ -350,7 +350,7 @@ namespace CSharpLua {
       }
 
       if (refOrOutParameters.Count > 0) {
-        var returnStatement = new LuaMultipleReturnStatementSyntax();
+        var returnStatement = new LuaReturnStatementSyntax();
         returnStatement.Expressions.AddRange(refOrOutParameters);
         function.AddStatement(returnStatement);
       }
@@ -437,6 +437,10 @@ namespace CSharpLua {
         } else {
           function.AddStatement(new LuaReturnStatementSyntax(expression));
         }
+      }
+
+      if (symbol.IsAsync) {
+        VisitAsync(symbol.ReturnsVoid, function);
       }
 
       PopFunction();
@@ -577,7 +581,7 @@ namespace CSharpLua {
       if (ifStatement != null) {
         if (!hasCatchRoot) {
           Contract.Assert(ifStatement.Else == null);
-          LuaMultipleReturnStatementSyntax rethrowStatement = new LuaMultipleReturnStatementSyntax();
+          var rethrowStatement = new LuaReturnStatementSyntax();
           rethrowStatement.Expressions.Add(LuaIdentifierNameSyntax.One);
           rethrowStatement.Expressions.Add(temp);
           LuaBlockSyntax block = new LuaBlockSyntax();
@@ -600,37 +604,19 @@ namespace CSharpLua {
 
         var temp1 = GetTempIdentifier(node);
         var temp2 = isReturnVoid ? null : GetTempIdentifier(node);
-        LuaLocalVariablesStatementSyntax localVariables = new LuaLocalVariablesStatementSyntax();
+        var localVariables = new LuaLocalVariablesStatementSyntax();
         localVariables.Variables.Add(temp1);
         if (temp2 != null) {
           localVariables.Variables.Add(temp2);
         }
-        LuaEqualsValueClauseListSyntax initializer = new LuaEqualsValueClauseListSyntax();
+        var initializer = new LuaEqualsValueClauseListSyntax();
         initializer.Values.Add(invocationExpression);
         localVariables.Initializer = initializer;
 
-        LuaIfStatementSyntax ifStatement = new LuaIfStatementSyntax(temp1);
-        if (CurFunction is LuaCheckReturnFunctionExpressionSyntax) {
-          LuaMultipleReturnStatementSyntax returnStatement = new LuaMultipleReturnStatementSyntax();
-          returnStatement.Expressions.Add(LuaIdentifierNameSyntax.True);
-          if (temp2 != null) {
-            returnStatement.Expressions.Add(temp2);
-          }
-          ifStatement.Body.Statements.Add(returnStatement);
-        } else {
-          if (curMethodInfo != null && curMethodInfo.RefOrOutParameters.Count > 0) {
-            LuaMultipleReturnStatementSyntax returnStatement = new LuaMultipleReturnStatementSyntax();
-            if (temp2 != null) {
-              returnStatement.Expressions.Add(temp2);
-            }
-            returnStatement.Expressions.AddRange(curMethodInfo.RefOrOutParameters);
-            ifStatement.Body.Statements.Add(returnStatement);
-          } else {
-            ifStatement.Body.Statements.Add(new LuaReturnStatementSyntax(temp2));
-          }
-        }
-
-        LuaStatementListSyntax statements = new LuaStatementListSyntax();
+        var ifStatement = new LuaIfStatementSyntax(temp1);
+        var statement = InternalVisitReturnStatement(temp2);
+        ifStatement.Body.Statements.Add(statement);
+        var statements = new LuaStatementListSyntax();
         statements.Statements.Add(localVariables);
         statements.Statements.Add(ifStatement);
         return statements;
@@ -960,8 +946,6 @@ namespace CSharpLua {
     private void BuildOperatorMethodDeclaration(BaseMethodDeclarationSyntax node) {
       var symbol = semanticModel_.GetDeclaredSymbol(node);
       methodInfos_.Push(new MethodInfo(symbol));
-
-      bool isStatic = symbol.IsStatic;
       bool isPrivate = symbol.IsPrivate();
 
       LuaIdentifierNameSyntax name = GetMemberName(symbol);
@@ -1033,7 +1017,7 @@ namespace CSharpLua {
     }
 
     public override LuaSyntaxNode VisitLocalFunctionStatement(LocalFunctionStatementSyntax node) {
-      var result = BuildMethodDeclaration(node, default(SyntaxList<AttributeListSyntax>), node.ParameterList, node.TypeParameterList, node.Body, node.ExpressionBody, node.ReturnType);
+      var result = BuildMethodDeclaration(node, default, node.ParameterList, node.TypeParameterList, node.Body, node.ExpressionBody, node.ReturnType);
       var body = FindParentMethodBody(node);
       bool isOnlyOne = body == null || body.Statements.OfType<LocalFunctionStatementSyntax>().Count() == 1;
       if (isOnlyOne) {

@@ -17,11 +17,11 @@ limitations under the License.
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-
 using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -278,6 +278,10 @@ namespace CSharpLua {
       return modifiers.Any(i => i.IsKind(SyntaxKind.OutKeyword) || i.IsKind(SyntaxKind.RefKeyword));
     }
 
+    public static bool IsOutOrRef(this SyntaxToken token) {
+      return token.IsKind(SyntaxKind.OutKeyword) || token.IsKind(SyntaxKind.RefKeyword);
+    }
+
     public static bool IsStringType(this ITypeSymbol type) {
       return type.SpecialType == SpecialType.System_String;
     }
@@ -380,23 +384,17 @@ namespace CSharpLua {
       }
     }
 
-    public static bool HasNoFiledAttribute(this SyntaxTrivia trivia) {
-      return trivia.ToString().Contains(LuaDocumentStatement.kNoField);
-    }
-
-    private static bool HasMetadataAttribute(this SyntaxTrivia trivia) {
-      return trivia.ToString().Contains(LuaDocumentStatement.kMetadata);
-    }
-
     public static bool HasMetadataAttribute(this ISymbol symbol) {
       var syntaxReference = symbol.DeclaringSyntaxReferences.FirstOrDefault();
       if (syntaxReference != null) {
-        var documentTrivia = syntaxReference.GetSyntax().GetLeadingTrivia().FirstOrDefault(i => i.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
-        if (documentTrivia != null && documentTrivia.HasMetadataAttribute()) {
-          return true;
-        }
+        return syntaxReference.GetSyntax().HasCSharpLuaAttribute(LuaDocumentStatement.AttributeFlags.Metadata);
       }
       return false;
+    }
+
+    public static bool HasCSharpLuaAttribute(this SyntaxNode node, LuaDocumentStatement.AttributeFlags attribute) {
+      var documentTrivia = node.GetLeadingTrivia().FirstOrDefault(i => i.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
+      return documentTrivia != null && documentTrivia.ToString().Contains(LuaDocumentStatement.ToString(attribute));
     }
 
     public static bool IsAssignment(this SyntaxKind kind) {
@@ -933,16 +931,48 @@ namespace CSharpLua {
       return symbol.Name == "CompilerServices" && symbol.ContainingNamespace.Name == "Runtime" && symbol.ContainingNamespace.ContainingNamespace.Name == "System";
     }
 
+    public static bool HasCompilerGeneratedAttribute(this ImmutableArray<AttributeData> attrs) {
+      return attrs.Any(i => i.AttributeClass.IsCompilerGeneratedAttribute());
+    }
+
     public static bool IsCompilerGeneratedAttribute(this INamedTypeSymbol symbol) {
       return symbol.Name == "CompilerGeneratedAttribute" && symbol.ContainingNamespace.IsRuntimeCompilerServices();
     }
 
-    public static bool IsSystemObjectOrValueType(this INamedTypeSymbol symbol) {
-      return symbol.SpecialType == SpecialType.System_Object || symbol.SpecialType == SpecialType.System_ValueType;
+    public static bool HasAggressiveInliningAttribute(this ISymbol symbol) {
+      return symbol.GetAttributes().Any(i => i.IsMethodImplOptions(MethodImplOptions.AggressiveInlining));
     }
 
-    public static bool HasCompilerGeneratedAttribute(this ImmutableArray<AttributeData> attrs) {
-      return attrs.Any(i => i.AttributeClass.IsCompilerGeneratedAttribute());
+    public static bool HasNoInliningAttribute(this ISymbol symbol) {
+      return symbol.GetAttributes().Any(i => i.IsMethodImplOptions(MethodImplOptions.NoInlining));
+    }
+
+    private static bool IsMethodImplOptions(this AttributeData attributeData, MethodImplOptions option) {
+      if (attributeData.AttributeClass.IsMethodImplAttribute()) {
+        foreach (var constructorArgument in attributeData.ConstructorArguments) {
+          if (constructorArgument.Value is int v) {
+            var options = (MethodImplOptions)v;
+            return options.HasFlag(option);
+          }
+        }
+      }
+      return false;
+    }
+
+    private static bool IsMethodImplAttribute(this INamedTypeSymbol symbol) {
+      return symbol.Name == "MethodImplAttribute" && symbol.ContainingNamespace.IsRuntimeCompilerServices();
+    }
+
+    private static bool IsSystemDiagnostics(this INamespaceSymbol symbol) {
+      return symbol.Name == "Diagnostics" && symbol.ContainingNamespace.Name == "System";
+    }
+
+    public static bool IsConditionalAttribute(this INamedTypeSymbol symbol) {
+      return symbol.Name == "ConditionalAttribute" && symbol.ContainingNamespace.IsSystemDiagnostics();
+    }
+
+    public static bool IsSystemObjectOrValueType(this INamedTypeSymbol symbol) {
+      return symbol.SpecialType == SpecialType.System_Object || symbol.SpecialType == SpecialType.System_ValueType;
     }
 
     public static string GetMetaDataAttributeFlags(this ISymbol symbol, PropertyMethodKind propertyMethodKind = 0) {
