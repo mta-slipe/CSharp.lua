@@ -6,6 +6,10 @@ local cos = math.cos
 local sin = math.sin
 local abs = math.abs
 
+local IComparable = System.IComparable
+local IComparable_1 = System.IComparable_1
+local IEquatable_1 = System.IEquatable_1
+
 local new = function (cls, ...)
     local this = setmetatable({}, cls)
     return this, cls.__ctor__(this, ...)
@@ -23,6 +27,10 @@ Matrix3x2.__ctor__ = function(this, m11, m12, m21, m22, m31, m32)
     local mt = getmetatable(this)
     mt.__unm = Matrix3x2.op_UnaryNegation
     setmetatable(this, mt)
+end
+
+Matrix3x2.__inherits__ = function (_, T)
+    return { IComparable, IComparable_1(T), IEquatable_1(T) }
 end
 
 Matrix3x2.getIdentity = function ()

@@ -975,6 +975,36 @@ namespace CSharpLua {
       return symbol.SpecialType == SpecialType.System_Object || symbol.SpecialType == SpecialType.System_ValueType;
     }
 
+    public static bool IsCombineImplicitlyCtor(this INamedTypeSymbol symbol) {
+      return symbol.IsValueType && symbol.InstanceConstructors.Any(i => !i.IsImplicitlyDeclared && i.IsNotNullParameterExists());
+    }
+
+    private static int FindNotNullParameterIndex(this IMethodSymbol symbol) {
+      return symbol.Parameters.IndexOf(i => i.Type.IsValueType && i.RefKind != RefKind.Out);
+    }
+
+    public static bool IsNotNullParameterExists(this IMethodSymbol symbol) {
+      return symbol.FindNotNullParameterIndex() != -1;
+    }
+
+    public static bool IsCombineImplicitlyCtorMethod(this IMethodSymbol symbol, out int notNullParameterIndex) {
+      notNullParameterIndex = -1;
+
+      var type = (INamedTypeSymbol)symbol.ReceiverType;
+      if (type.IsValueType) {
+        foreach (var ctor in type.InstanceConstructors) {
+          if (!ctor.IsImplicitlyDeclared) {
+            int index = ctor.FindNotNullParameterIndex();
+            if (index != -1) {
+              notNullParameterIndex = index;
+              return symbol == ctor;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
     public static string GetMetaDataAttributeFlags(this ISymbol symbol, PropertyMethodKind propertyMethodKind = 0) {
       const int kParametersMaxCount = 256;
 

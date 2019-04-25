@@ -6,6 +6,10 @@ local sin = math.sin
 local cos = math.cos
 local acos = math.acos
 
+local IComparable = System.IComparable
+local IComparable_1 = System.IComparable_1
+local IEquatable_1 = System.IEquatable_1
+
 local new = function (cls, ...)
     local this = setmetatable({}, cls)
     return this, cls.__ctor__(this, ...)
@@ -35,6 +39,10 @@ Quaternion.__ctor__ = function(this, x, y, z, w)
     local mt = getmetatable(this)
     mt.__unm = Quaternion.op_UnaryNegation
     setmetatable(this, mt)
+end
+
+Quaternion.__inherits__ = function (_, T)
+    return { IComparable, IComparable_1(T), IEquatable_1(T) }
 end
 
 Quaternion.getIdentity = function ()

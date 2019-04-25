@@ -1435,9 +1435,20 @@ namespace CSharpLua {
       Contract.Assert(symbool.MethodKind == MethodKind.Constructor);
       if (generator_.IsFromLuaModule(symbool.ContainingType)) {
         var typeSymbol = (INamedTypeSymbol)symbool.ReceiverType;
-        var ctors = typeSymbol.Constructors.Where(i => !i.IsStatic).ToList();
-        if (ctors.Count > 1) {
-          int firstCtorIndex = ctors.IndexOf(i => i.Parameters.IsEmpty);
+        if (typeSymbol.InstanceConstructors.Length > 1) {
+          var ctors = typeSymbol.InstanceConstructors.ToList();
+          int firstCtorIndex;
+          if (typeSymbol.IsValueType) {
+            Contract.Assert(ctors.Last().IsImplicitlyDeclared);
+            firstCtorIndex = ctors.IndexOf(i => i.IsNotNullParameterExists());
+            if (firstCtorIndex == -1) {
+              firstCtorIndex = ctors.Count - 1;
+            }  else if (symbool.IsImplicitlyDeclared) {
+              return 1;
+            } 
+          } else {
+            firstCtorIndex = ctors.IndexOf(i => i.Parameters.IsEmpty);
+          }
           if (firstCtorIndex != -1 && firstCtorIndex != 0) {
             var firstCtor = ctors[firstCtorIndex];
             ctors.Remove(firstCtor);
@@ -1546,6 +1557,8 @@ namespace CSharpLua {
       MethodInfo methodInfo = new MethodInfo(symbol, refOrOutParameters) {
         InliningReturnVars = new List<LuaIdentifierNameSyntax>(),
       };
+      int prevFunctionTempCount = CurFunction.TempCount;
+      int prevBlockTempCount = CurBlock.TempCount; 
       if (!symbol.ReturnsVoid) {
         methodInfo.InliningReturnVars.Add(GetTempIdentifier(root));
       }
@@ -1553,7 +1566,7 @@ namespace CSharpLua {
 
       bool isThisMemberAccess = false;
       var block = new LuaBlockStatementSyntax();
-      blocks_.Push(block);
+      PushBlock(block);
       if (invocation.Expression is LuaMemberAccessExpressionSyntax memberAccess) {
         if (memberAccess.IsObjectColon) {
           var thisLocal = new LuaLocalVariableDeclaratorSyntax(LuaIdentifierNameSyntax.This, memberAccess.Expression);
@@ -1604,15 +1617,14 @@ namespace CSharpLua {
       }
       semanticModel_ = prevSemanticModel_;
 
-      blocks_.Pop();
+      PopBlock();
       methodInfos_.Pop();
       generator_.AddInlineSymbol(symbol);
 
       inlineExpression = CompressionInliningBlock(root, block, methodInfo, isThisMemberAccess);
       if (inlineExpression != null) {
-        if (!symbol.ReturnsVoid) {
-          ReleaseTempIndex();
-        }
+        CurFunction.TempCount = prevFunctionTempCount;
+        CurBlock.TempCount = prevBlockTempCount;
         return true;
       }
 
