@@ -113,7 +113,6 @@ namespace CSharpLua.LuaAst {
     }
 
     private void AddImport(LuaIdentifierNameSyntax name, LuaExpressionSyntax value) {
-      Console.WriteLine(name.ValueText);
       importAreaStatements.Statements.Add(new LuaLocalVariableDeclaratorSyntax(name, value));
     }
 
