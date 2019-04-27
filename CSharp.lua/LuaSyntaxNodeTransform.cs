@@ -443,16 +443,16 @@ namespace CSharpLua {
         }
 
         if (baseTypeExpressions.Count > 0) {
-          try {
+          //try {
             var genericArgument = CheckSpeaicalGenericArgument(major.Symbol);
             var baseCopyFields = GetBaseCopyFields(baseTypes.FirstOrDefault());
             major.TypeDeclaration.AddBaseTypes(baseTypeExpressions, genericArgument, baseCopyFields);
             if (hasExtendSelf && !generator_.IsExplicitStaticCtorExists(major.Symbol)) {
               major.TypeDeclaration.IsForceStaticCtor = true;
             }
-          } catch (Exception) {
+          //} catch (Exception) {
 
-          }
+          //}
         }
       }
 
