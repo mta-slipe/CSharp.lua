@@ -1,15 +1,9 @@
 local System = System
 local SystemNumerics = System.Numerics
-
 local abs = math.abs
 local min = math.min
 local max = math.max
 local sqrt = math.sqrt
-
-local IComparable = System.IComparable
-local IComparable_1 = System.IComparable_1
-local IEquatable_1 = System.IEquatable_1
-local IFormattable = System.IFormattable
 
 local new = function (cls, ...)
     local this = setmetatable({}, cls)
@@ -41,10 +35,6 @@ Vector3.__ctor__ = function(this, X, Y, Z)
     local mt = getmetatable(this)
     mt.__unm = Vector3.op_UnaryNegation
     setmetatable(this, mt)
-end
-
-Vector3.__inherits__ = function (_, T)
-    return { IComparable, IComparable_1(T), IEquatable_1(T), IFormattable }
 end
 
 -- https://docs.microsoft.com/en-us/dotnet/api/system.numerics.vector3?view=netframework-4.7.2#properties
@@ -107,7 +97,7 @@ end
 
 -- https://docs.microsoft.com/en-us/dotnet/api/system.numerics.vector3.squareroot?view=netframework-4.7.2#System_Numerics_Vector3_SquareRoot_System_Numerics_Vector3_
 Vector3.SquareRoot = function(value)
-    return new(Vector3, System.ToSingle(sqrt(value.X)), System.ToSingle(sqrt(value.Y)), System.ToSingle(sqrt(value.Z)))
+    return new(Vector3, System.ToSingle(math.Sqrt(value.X)), System.ToSingle(math.Sqrt(value.Y)), System.ToSingle(math.Sqrt(value.Z)))
 end
 
 -- https://docs.microsoft.com/en-us/dotnet/api/system.numerics.vector3.add?view=netframework-4.7.2#System_Numerics_Vector3_Add_System_Numerics_Vector3_System_Numerics_Vector3_

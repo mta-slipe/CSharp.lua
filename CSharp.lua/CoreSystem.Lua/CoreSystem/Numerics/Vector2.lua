@@ -1,15 +1,9 @@
 local System = System
 local SystemNumerics = System.Numerics
-
 local abs = math.abs
 local min = math.min
 local max = math.max
 local sqrt = math.sqrt
-
-local IComparable = System.IComparable
-local IComparable_1 = System.IComparable_1
-local IEquatable_1 = System.IEquatable_1
-local IFormattable = System.IFormattable
 
 local new = function (cls, ...)
     local this = setmetatable({}, cls)
@@ -29,10 +23,6 @@ Vector2.__ctor__ = function(this, X, Y)
     local mt = getmetatable(this)
     mt.__unm = Vector2.op_UnaryNegation
     setmetatable(this, mt)
-end
-
-Vector2.__inherits__ = function (_, T)
-    return { IComparable, IComparable_1(T), IEquatable_1(T), IFormattable }
 end
 
 Vector2.getZero = function ()
@@ -188,7 +178,7 @@ Vector2.Distance = function (value1, value2)
 
     local ls = dx * dx + dy * dy
 
-    return System.ToSingle(sqrt(ls))
+    return System.ToSingle(math.Sqrt(ls))
 end
 
 Vector2.DistanceSquared = function (value1, value2)

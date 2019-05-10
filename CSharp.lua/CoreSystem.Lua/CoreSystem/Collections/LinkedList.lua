@@ -20,7 +20,7 @@ local throw = System.throw
 local each = System.each
 local ArgumentNullException = System.ArgumentNullException
 local InvalidOperationException = System.InvalidOperationException
-local EqualityComparer = System.EqualityComparer
+local EqualityComparer_1 = System.EqualityComparer_1
 
 local getmetatable = getmetatable
 local setmetatable = setmetatable
@@ -230,12 +230,11 @@ local LinkedList = {
   Find = function (this, value)     
     local head = this.head
     local node = head
-    local comparer = EqualityComparer(t.__genericT__).getDefault()
-    local equals = comparer.EqualsOf
+    local equals = EqualityComparer_1(this.__genericT__).getDefault().Equals
     if node ~= nil then
       if value ~= nil then
         repeat
-          if equals(comparer, node.Value, value) then
+          if equals(node.Value, value) then
             return node
           end
           node = node.next
@@ -256,12 +255,11 @@ local LinkedList = {
     if head == nil then return nil end
     local last = head.prev
     local node = last
-    local comparer = EqualityComparer(t.__genericT__).getDefault()
-    local equals = comparer.EqualsOf
+    local equals = EqualityComparer_1(this.__genericT__).getDefault().Equals
     if node ~= nil then
       if value ~= nil then
         repeat
-          if equals(comparer, node.Value, value) then
+          if equals(node.Value, value) then
             return node
           end
           node = node.prev

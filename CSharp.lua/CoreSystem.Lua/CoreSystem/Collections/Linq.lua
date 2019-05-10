@@ -32,7 +32,7 @@ local NullReferenceException = System.NullReferenceException
 local ArgumentNullException = System.ArgumentNullException
 local ArgumentOutOfRangeException = System.ArgumentOutOfRangeException
 local InvalidOperationException = System.InvalidOperationException
-local EqualityComparer = System.EqualityComparer
+local EqualityComparer_1 = System.EqualityComparer_1
 local Comparer_1 = System.Comparer_1
 local Empty = System.Array.Empty
 
@@ -42,9 +42,8 @@ local IEnumerator_1 = System.IEnumerator_1
 local IEnumerator = System.IEnumerator
 
 local assert = assert
-local getmetatable = getmetatable
-local setmetatable = setmetatable
 local select = select
+local getmetatable = getmetatable
 local tsort = table.sort
 
 local InternalEnumerable = define("System.Linq.InternalEnumerable", function(T) 
@@ -259,13 +258,13 @@ end
 
 local Lookup = {}
 function Lookup.__ctor__(this, comparer)
-  this.comparer = comparer or EqualityComparer(this.__genericTKey__).getDefault()
+  this.comparer = comparer or EqualityComparer_1(this.__genericTKey__).getDefault()
   this.groups = {}
   this.indexs = {}
 end
 
 local function getGrouping(this, key)
-  local hashCode = this.comparer:GetHashCodeOf(key)
+  local hashCode = this.comparer.GetHashCode(key)
   local groupIndex = this.indexs[hashCode]
   return this.groups[groupIndex]
 end
@@ -313,7 +312,7 @@ Grouping.__inherits__ = { IGrouping }
 define("System.Linq.Grouping", Grouping)
 
 local function addToLookup(this, key, value)
-  local hashCode = this.comparer:GetHashCodeOf(key)
+  local hashCode = this.comparer.GetHashCode(key)
   local groupIndex = this.indexs[hashCode]
   local group
   if groupIndex == nil then
@@ -436,15 +435,16 @@ local function orderBy(source, keySelector, comparer, TKey, descending)
     end
     return k
   end
-  local c = comparer.Compare
   local compare
   if descending then
+    local c = comparer.Compare
     compare = function(x, y)
-      return -c(comparer, getKey(x), getKey(y))
+      return -c(getKey(x), getKey(y))
     end
   else
+    local c = comparer.Compare
     compare = function(x, y)
-      return c(comparer, getKey(x), getKey(y))
+      return c(getKey(x), getKey(y))
     end
   end
   return ordered(source, compare)
@@ -471,25 +471,26 @@ local function thenBy(source, keySelector, comparer, TKey, descending)
     end
     return k
   end
-  local c = comparer.Compare
   local compare
   local parentSource, parentCompare = source.source, source.compare
   if descending then
+    local c = comparer.Compare
     compare = function(x, y)
       local v = parentCompare(x, y)
       if v ~= 0 then
         return v
       else
-        return -c(comparer, getKey(x), getKey(y))
+        return -c(getKey(x), getKey(y))
       end
     end
   else
+    local c = comparer.Compare
     compare = function(x, y)
       local v = parentCompare(x, y)
       if v ~= 0 then
         return v
       else
-        return c(comparer, getKey(x), getKey(y))
+        return c(getKey(x), getKey(y))
       end
     end
   end
@@ -601,8 +602,8 @@ function Enumerable.Zip(first, second, resultSelector, TResult)
   end)
 end
 
-local function addToSet(set, v, getHashCode, comparer)
-  local hashCode = getHashCode(comparer, v)
+local function addToSet(set, v, getHashCode)
+  local hashCode = getHashCode(v)
   if set[hashCode] == nil then
     set[hashCode] = true
     return true
@@ -610,8 +611,8 @@ local function addToSet(set, v, getHashCode, comparer)
   return false
 end
 
-local function removeFromSet(set, v, getHashCode, comparer)
-  local hashCode = getHashCode(comparer, v)
+local function removeFromSet(set, v, getHashCode)
+  local hashCode = getHashCode(v)
   if set[hashCode] ~= nil then
     set[hashCode] = nil
     return true
@@ -620,7 +621,7 @@ local function removeFromSet(set, v, getHashCode, comparer)
 end
 
 local function getComparer(source, comparer)
-  return comparer or EqualityComparer(source.__genericT__).getDefault()
+  return comparer or EqualityComparer_1(source.__genericT__).getDefault()
 end
 
 function Enumerable.Distinct(source, comparer)
@@ -628,12 +629,11 @@ function Enumerable.Distinct(source, comparer)
   local T = source.__genericT__
   return createEnumerable(T, function()
     local set = {}
-    comparer = getComparer(source, comparer)
-    local getHashCode = comparer.GetHashCodeOf
+    local getHashCode = getComparer(source, comparer).GetHashCode
     return createEnumerator(T, source, function(en)
       while en:MoveNext() do
         local current = en:getCurrent()
-        if addToSet(set, current, getHashCode, comparer) then
+        if addToSet(set, current, getHashCode) then
           return true, current  
         end
       end
@@ -645,17 +645,16 @@ end
 function Enumerable.Union(first, second, comparer)
   if first == nil then throw(ArgumentNullException("first")) end
   if second == nil then throw(ArgumentNullException("second")) end
-  local T = first.__genericT__
+  local T = source.__genericT__
   return createEnumerable(T, function()
     local set = {}
-    comparer = getComparer(first, comparer)
-    local getHashCode = comparer.GetHashCodeOf
+    local getHashCode = getComparer(first, comparer).GetHashCode
     local secondEn
     return createEnumerator(T, first, function(en)
       if secondEn == nil then
         while en:MoveNext() do
           local current = en:getCurrent()
-          if addToSet(set, current, getHashCode, comparer) then
+          if addToSet(set, current, getHashCode) then
             return true, current  
           end
         end
@@ -663,7 +662,7 @@ function Enumerable.Union(first, second, comparer)
       end
       while secondEn:MoveNext() do
         local current = secondEn:getCurrent()
-        if addToSet(set, current, getHashCode, comparer) then
+        if addToSet(set, current, getHashCode) then
           return true, current  
         end
       end
@@ -675,15 +674,14 @@ end
 function Enumerable.Intersect(first, second, comparer)
   if first == nil then throw(ArgumentNullException("first")) end
   if second == nil then throw(ArgumentNullException("second")) end
-  local T = first.__genericT__
+  local T = source.__genericT__
   return createEnumerable(T, function()
     local set = {}
-    comparer = getComparer(first, comparer)
-    local getHashCode = comparer.GetHashCodeOf
+    local getHashCode = getComparer(first, comparer).GetHashCode
     return createEnumerator(T, first, function(en)
       while en:MoveNext() do
         local current = en:getCurrent()
-        if removeFromSet(set, current, getHashCode, comparer) then
+        if removeFromSet(set, current, getHashCode) then
           return true, current
         end
       end
@@ -691,7 +689,7 @@ function Enumerable.Intersect(first, second, comparer)
     end,
     function()
       for _, v in each(second) do
-        addToSet(set, v, getHashCode, comparer)
+        addToSet(set, v, getHashCode)
       end
     end)
   end) 
@@ -700,15 +698,14 @@ end
 function Enumerable.Except(first, second, comparer)
   if first == nil then throw(ArgumentNullException("first")) end
   if second == nil then throw(ArgumentNullException("second")) end
-  local T = first.__genericT__
+  local T = source.__genericT__
   return createEnumerable(T, function()
     local set = {}
-    comparer = getComparer(first, comparer)
-    local getHashCode = comparer.GetHashCodeOf
+    local getHashCode = getComparer(first, comparer).GetHashCode
     return createEnumerator(T, first, function(en) 
       while en:MoveNext() do
         local current = en:getCurrent()
-        if addToSet(set, current, getHashCode, comparer) then
+        if addToSet(set, current, getHashCode) then
           return true, current  
         end
       end
@@ -716,7 +713,7 @@ function Enumerable.Except(first, second, comparer)
     end,
     function()
       for _, v in each(second) do
-        addToSet(set, v, getHashCode, comparer)
+        addToSet(set, v, getHashCode)
       end
     end)
   end)
@@ -749,12 +746,11 @@ end
 function Enumerable.SequenceEqual(first, second, comparer)
   if first == nil then throw(ArgumentNullException("first")) end
   if second == nil then throw(ArgumentNullException("second")) end
-  comparer = getComparer(first, comparer)
-  local equals = comparer.EqualsOf
+  local equals = getComparer(first, comparer).Equals
   local e1 = first:GetEnumerator()
   local e2 = second:GetEnumerator()
   while e1:MoveNext() do
-    if not(e2:MoveNext() and equals(comparer, e1:getCurrent(), e2:getCurrent())) then
+    if not(e2:MoveNext() and equals(e1:getCurrent(), e2:getCurrent())) then
       return false
     end
   end
@@ -1092,10 +1088,9 @@ end
 
 function Enumerable.Contains(source, value, comparer)
   if source == nil then throw(ArgumentNullException("source")) end
-  comparer = getComparer(source, comparer)
-  local equals = comparer.EqualsOf
+  local equals = getComparer(source, comparer).Equals
   for _, v in each(source) do
-    if equals(comparer, v, value) then
+    if equals(v, value) then
       return true
     end
   end
@@ -1165,13 +1160,12 @@ local function minOrMax(compareFn, source, ...)
     selector, T = ...
     if selector == nil then throw(ArgumentNullException("selector")) end
   end
-  local comparer = Comparer_1(T).getDefault()
-  local compare = comparer.Compare
+  local compare = Comparer_1(T).getDefault().Compare
   local value = T:default()
   if value == nil then
     for _, x in each(source) do
       x = selector(x)
-      if x ~= nil and (value == nil or compareFn(compare, comparer, x, value)) then
+      if x ~= nil and (value == nil or compareFn(compare, x, value)) then
         value = x
       end 
     end
@@ -1181,7 +1175,7 @@ local function minOrMax(compareFn, source, ...)
     for _, x in each(source) do
       x = selector(x)
       if hasValue then
-        if compareFn(compare, comparer, x, value) then
+        if compareFn(compare, x, value) then
           value = x
         end
       else
@@ -1194,16 +1188,16 @@ local function minOrMax(compareFn, source, ...)
   end
 end
 
-local function minFn(compare, comparer, x, y)
-  return compare(comparer, x, y) < 0
+local function minFn(compare, x, y)
+  return compare(x, y) < 0
 end
 
 function Enumerable.Min(source, ...)
   return minOrMax(minFn, source, ...)
 end
 
-local function maxFn(compare, comparer, x, y)
-  return compare(comparer, x, y) > 0
+local function maxFn(compare, x, y)
+  return compare(x, y) > 0
 end
 
 function Enumerable.Max(source, ...)

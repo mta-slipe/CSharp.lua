@@ -1,15 +1,9 @@
 local System = System
 local SystemNumerics = System.Numerics
-
 local abs = math.abs
 local min = math.min
 local max = math.max
 local sqrt = math.sqrt
-
-local IComparable = System.IComparable
-local IComparable_1 = System.IComparable_1
-local IEquatable_1 = System.IEquatable_1
-local IFormattable = System.IFormattable
 
 local new = function (cls, ...)
     local this = setmetatable({}, cls)
@@ -51,10 +45,6 @@ Vector4.__ctor__ = function(this, X, Y, Z, W)
     local mt = getmetatable(this)
     mt.__unm = Vector4.op_UnaryNegation
     setmetatable(this, mt)
-end
-
-Vector4.__inherits__ = function (_, T)
-    return { IComparable, IComparable_1(T), IEquatable_1(T), IFormattable }
 end
 
 Vector4.getOne = function() return new(Vector4, 1.0, 1.0, 1.0, 1.0) end

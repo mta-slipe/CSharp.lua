@@ -261,8 +261,8 @@ local function parse(s)
 end
 
 DateTime = System.defStc("System.DateTime", {
-  ticks = 0,
-  kind = 0,
+  MinValue = false,
+  MaxValue = false,
   Compare = compare,
   CompareTo = compare,
   CompareToObj = function (this, t)
@@ -287,8 +287,7 @@ DateTime = System.defStc("System.DateTime", {
   IsLeapYear = isLeapYear,
   __ctor__ = function (this, ...)
     local len = select("#", ...)
-    if len == 0 then
-    elseif len == 1 then
+    if len == 1 then
       local ticks = ...
       checkTicks(ticks)
       this.ticks = ticks
@@ -358,7 +357,7 @@ DateTime = System.defStc("System.DateTime", {
     return getDataPart(this.ticks, 1)
   end,
   getKind = function (this)
-    return this.kind
+    return this.kind or 0
   end,
   getHour = TimeSpan.getHours,
   getMinute = TimeSpan.getMinutes,
@@ -432,9 +431,7 @@ DateTime = System.defStc("System.DateTime", {
   end,
   default = function ()
     return minValue
-  end,
-  MinValue = false,
-  MaxValue = false
+  end
 })
 
 minValue = DateTime(0)

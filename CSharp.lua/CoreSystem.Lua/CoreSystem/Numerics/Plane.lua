@@ -4,10 +4,6 @@ local SystemNumerics = System.Numerics
 local sqrt = math.sqrt
 local abs = math.abs
 
-local IComparable = System.IComparable
-local IComparable_1 = System.IComparable_1
-local IEquatable_1 = System.IEquatable_1
-
 local new = function (cls, ...)
     local this = setmetatable({}, cls)
     return this, cls.__ctor__(this, ...)
@@ -31,10 +27,6 @@ Plane.__ctor__ = function(this, val1, val2, val3, val4)
         this.Normal = SystemNumerics.Vector3(val1, val2, val3)
         this.D = val4
     end
-end
-
-Plane.__inherits__ = function (_, T)
-    return { IComparable, IComparable_1(T), IEquatable_1(T) }
 end
 
 Plane.CreateFromVertices = function (point1, point2, point3)

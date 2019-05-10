@@ -125,12 +125,13 @@ local function parse(s)
 end
 
 TimeSpan = System.defStc("System.TimeSpan", {
-  ticks = 0,
+  Zero = false,
+  MaxValue = false,
+  MinValue = false,
   __ctor__ = function (this, ...)
     local ticks
     local length = select("#", ...)
-    if length == 0 then
-    elseif length == 1 then
+    if length == 1 then
       ticks = ...
     elseif length == 3 then
       local hours, minutes, seconds = ...
@@ -278,10 +279,7 @@ TimeSpan = System.defStc("System.TimeSpan", {
   end,
   default = function ()
     return zero
-  end,
-  Zero = false,
-  MaxValue = false,
-  MinValue = false
+  end
 })
 
 zero = TimeSpan(0)

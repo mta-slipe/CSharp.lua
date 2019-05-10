@@ -29,7 +29,6 @@ local select = select
 local xpcall = xpcall
 local rawget = rawget
 local rawset = rawset
-local rawequal = rawequal
 local tostring = tostring
 local string = string
 local sfind = string.find
@@ -1008,7 +1007,7 @@ Object = defCls("System.Object", {
   default = emptyFn,
   class = "C",
   EqualsObj = equals,
-  ReferenceEquals = rawequal,
+  ReferenceEquals = equals,
   GetHashCode = identityFn,
   EqualsStatic = equalsObj,
   GetType = false,
@@ -1022,7 +1021,10 @@ ValueType = {
     return T()
   end,
   __clone__ = function(this)
-    if type(this) == "table" then
+    local type_ = type(this)
+    if type_ == "number" or type_ == "bool" then
+      return this
+    elseif type_ == "table" then
       local cls = getmetatable(this)
       local t = {}
       for k, v in pairs(this) do
@@ -1034,7 +1036,6 @@ ValueType = {
       end
       return setmetatable(t, cls)
     end
-    return this
   end,
   EqualsObj = function (this, obj)
     if getmetatable(this) ~= getmetatable(obj) then return false end
