@@ -138,20 +138,8 @@ namespace CSharpLua {
         public ClassModel[] Classes;
       }
 
-      public sealed class ExportModel {
-        public sealed class AttributeModel {
-          [XmlAttribute("name")]
-          public string Name;
-        }
-        [XmlElement("attribute")]
-        public AttributeModel[] Attributes;
-      }
-
       [XmlElement("assembly")]
       public AssemblyModel Assembly;
-
-      [XmlElement("export")]
-      public ExportModel Export;
     }
 
     private enum MethodMetaType {
@@ -161,7 +149,7 @@ namespace CSharpLua {
     }
 
     private sealed class MethodMetaInfo {
-      private List<XmlMetaModel.MethodModel> models_ = new List<XmlMetaModel.MethodModel>();
+      private readonly List<XmlMetaModel.MethodModel> models_ = new List<XmlMetaModel.MethodModel>();
       private bool isSingleModel_;
 
       public void Add(XmlMetaModel.MethodModel model) {
@@ -340,10 +328,10 @@ namespace CSharpLua {
     }
 
     private sealed class TypeMetaInfo {
-      private XmlMetaModel.ClassModel model_;
-      private Dictionary<string, XmlMetaModel.FieldModel> fields_ = new Dictionary<string, XmlMetaModel.FieldModel>();
-      private Dictionary<string, XmlMetaModel.PropertyModel> propertys_ = new Dictionary<string, XmlMetaModel.PropertyModel>();
-      private Dictionary<string, MethodMetaInfo> methods_ = new Dictionary<string, MethodMetaInfo>();
+      private readonly XmlMetaModel.ClassModel model_;
+      private readonly Dictionary<string, XmlMetaModel.FieldModel> fields_ = new Dictionary<string, XmlMetaModel.FieldModel>();
+      private readonly Dictionary<string, XmlMetaModel.PropertyModel> propertys_ = new Dictionary<string, XmlMetaModel.PropertyModel>();
+      private readonly Dictionary<string, MethodMetaInfo> methods_ = new Dictionary<string, MethodMetaInfo>();
 
       public TypeMetaInfo(XmlMetaModel.ClassModel model) {
         model_ = model;
@@ -418,9 +406,8 @@ namespace CSharpLua {
       }
     }
 
-    private Dictionary<string, XmlMetaModel.NamespaceModel> namespaceNameMaps_ = new Dictionary<string, XmlMetaModel.NamespaceModel>();
-    private Dictionary<string, TypeMetaInfo> typeMetas_ = new Dictionary<string, TypeMetaInfo>();
-    private HashSet<string> exportAttributes_ = new HashSet<string>();
+    private readonly Dictionary<string, XmlMetaModel.NamespaceModel> namespaceNameMaps_ = new Dictionary<string, XmlMetaModel.NamespaceModel>();
+    private readonly Dictionary<string, TypeMetaInfo> typeMetas_ = new Dictionary<string, TypeMetaInfo>();
 
     public XmlMetaProvider(IEnumerable<string> files) {
       foreach (string file in files) {
@@ -437,17 +424,6 @@ namespace CSharpLua {
               }
               if (assembly.Classes != null) {
                 LoadType(string.Empty, assembly.Classes);
-              }
-            }
-            var export = model.Export;
-            if (export != null) {
-              if (export.Attributes != null) {
-                foreach (var attribute in export.Attributes) {
-                  if (string.IsNullOrEmpty(attribute.Name)) {
-                    throw new ArgumentException("attribute's name is empty");
-                  }
-                  exportAttributes_.Add(attribute.Name);
-                }
               }
             }
           }
@@ -637,10 +613,6 @@ namespace CSharpLua {
 
     public bool IsMethodIgnoreGeneric(IMethodSymbol symbol) {
       return GetMethodMetaInfo(symbol, MethodMetaType.IgnoreGeneric) == bool.TrueString;
-    }
-
-    public bool IsExportAttribute(INamedTypeSymbol attributeTypeSymbol) {
-      return exportAttributes_.Count > 0 && exportAttributes_.Contains(attributeTypeSymbol.ToString());
     }
   }
 }
