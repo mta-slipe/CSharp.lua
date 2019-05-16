@@ -119,7 +119,7 @@ namespace CSharpLua.LuaAst {
 
       var usingDeclares = UsingDeclares.Where(i => i.IsFromCode).ToList();
       var genericDeclares = GenericUsingDeclares.Where(i => i.IsFromCode).ToList();
-      if (usingDeclares.Count > 0 || genericDeclares.Count > 0) {
+      if (usingDeclares.Count > 0 || genericDeclares.Count > 0 || genericImports.Count > 0) {
         usingDeclares.Sort();
         genericDeclares.Sort();
         genericImports.Sort();

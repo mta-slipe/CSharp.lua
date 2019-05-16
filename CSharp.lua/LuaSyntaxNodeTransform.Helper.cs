@@ -856,7 +856,7 @@ namespace CSharpLua {
       CurCompilationUnit.UsingDeclares.Add(new UsingDeclare() {
         Prefix = prefix,
         NewPrefix = newPrefix,
-        IsFromCode = isFromCode,
+        IsFromCode = true,
       });
       return true;
     }
