@@ -914,9 +914,9 @@ namespace CSharpLua {
         if (!IsLocalVarExistsInCurMethod(newName)) {
           bool success;
           if (!symbol.IsTypeParameterExists()) {
-            success = AddGenericImport(invocationExpression, newName, argumentTypeNames, symbol.IsAbsoluteFromCode());
+            success = AddGenericImport(invocationExpression, newName, argumentTypeNames, true);// symbol.IsAbsoluteFromCode());
           } else {
-            success = CurTypeDeclaration.TypeDeclaration.AddGenericImport(invocationExpression, newName, argumentTypeNames, symbol.IsAbsoluteFromCode());
+            success = CurTypeDeclaration.TypeDeclaration.AddGenericImport(invocationExpression, newName, argumentTypeNames, true);//symbol.IsAbsoluteFromCode());
           }
           if (success) {
             luaExpression = newName;
