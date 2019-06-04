@@ -160,6 +160,10 @@ namespace CSharpLua {
       return -1;
     }
 
+    public static T[] ArrayOf<T>(this T t) {
+      return new T[] { t };
+    }
+
     public static Dictionary<string, string[]> GetCommondLines(string[] args) {
       Dictionary<string, string[]> cmds = new Dictionary<string, string[]>();
 
@@ -315,6 +319,10 @@ namespace CSharpLua {
       return type.SpecialType >= SpecialType.System_SByte && type.SpecialType <= SpecialType.System_UInt64;
     }
 
+    public static bool IsCastIntegerType(this ITypeSymbol type) {
+      return type.SpecialType >= SpecialType.System_Char && type.SpecialType <= SpecialType.System_UInt64;
+    }
+
     public static bool IsNumberType(this ITypeSymbol type) {
       if (type.IsNullableType()) {
         type = ((INamedTypeSymbol)type).TypeArguments.First();
@@ -331,6 +339,30 @@ namespace CSharpLua {
 
     public static bool IsNullableType(this ITypeSymbol type) {
       return type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+    }
+
+    public static bool IsNullableType(this ITypeSymbol type, out ITypeSymbol elemetType) {
+      elemetType = type.NullableElemetType();
+      return elemetType != null;
+    }
+
+    public static ITypeSymbol NullableElemetType(this ITypeSymbol type) {
+      return type.IsNullableType() ? ((INamedTypeSymbol)type).TypeArguments.First() : null;
+    }
+
+    public static bool IsEnumType(this ITypeSymbol type ,out ITypeSymbol symbol) {
+      if (type.TypeKind == TypeKind.Enum) {
+        symbol = type;
+        return true;
+      } else {
+        var nullableElemetType = type.NullableElemetType();
+        if (nullableElemetType != null && nullableElemetType.TypeKind == TypeKind.Enum) {
+          symbol = nullableElemetType;
+          return true;
+        }
+      }
+      symbol = null;
+      return false;
     }
 
     public static bool IsImmutable(this ITypeSymbol type) {
@@ -485,7 +517,7 @@ namespace CSharpLua {
       while (t != null) {
         var interfaces = implementType.AllInterfaces;
         foreach (var i in interfaces) {
-          if (i == interfaceType || i.IsImplementInterface(interfaceType)) {
+          if (i.Equals(interfaceType) || i.IsImplementInterface(interfaceType)) {
             return true;
           }
         }
@@ -498,8 +530,16 @@ namespace CSharpLua {
       return specialType >= SpecialType.System_Char && specialType <= SpecialType.System_Double;
     }
 
-    private static bool IsNumberTypeAssignableFrom(this ITypeSymbol left, ITypeSymbol right) {
+    public static bool IsDoubleOrFloatType(this ITypeSymbol type) {
+      return type.SpecialType == SpecialType.System_Double || type.SpecialType == SpecialType.System_Single;
+    }
+
+    public static bool IsNumberTypeAssignableFrom(this ITypeSymbol left, ITypeSymbol right) {
       if (left.SpecialType.IsBaseNumberType() && right.SpecialType.IsBaseNumberType()) {
+        if (left == right) {
+          return true;
+        }
+
         SpecialType begin;
         switch (right.SpecialType) {
           case SpecialType.System_Char:
@@ -528,13 +568,14 @@ namespace CSharpLua {
             break;
           }
         }
+
         SpecialType end = SpecialType.System_Double;
         return left.SpecialType >= begin && left.SpecialType <= end;
       }
       return false;
     }
 
-    public static bool IsImplementType(this ITypeSymbol left, ITypeSymbol right) {
+    public static bool Is(this ITypeSymbol left, ITypeSymbol right) {
       if (left.Equals(right)) {
         return true;
       }
@@ -548,18 +589,6 @@ namespace CSharpLua {
       }
 
       return false;
-    }
-
-    public static bool IsAssignableFrom(this ITypeSymbol left, ITypeSymbol right) {
-      if (left == right) {
-        return true;
-      }
-
-      if (left.IsNumberTypeAssignableFrom(right)) {
-        return true;
-      }
-
-      return right.IsImplementType(left);
     }
 
     private static void CheckSymbolDefinition<T>(ref T symbol) where T : class, ISymbol {
@@ -614,10 +643,8 @@ namespace CSharpLua {
       if (baseTypeSymbol.IsGenericType) {
         foreach (var baseTypeArgument in baseTypeSymbol.TypeArguments) {
           if (baseTypeSymbol.Kind != SymbolKind.TypeParameter) {
-            if (!baseTypeArgument.Equals(typeSymbol)) {
-              if (typeSymbol.IsAssignableFrom(baseTypeArgument)) {
-                return true;
-              }
+            if (!baseTypeArgument.Equals(typeSymbol) && baseTypeArgument.Is(typeSymbol)) {
+              return true;
             }
           }
         }
@@ -642,6 +669,18 @@ namespace CSharpLua {
         && typeSymbol.TypeKind != TypeKind.Enum
         && typeSymbol.TypeKind != TypeKind.Pointer
         && (typeSymbol.SpecialType == SpecialType.None && !typeSymbol.IsTimeSpanType());
+    }
+
+    public static bool IsMaybeValueType(this ITypeSymbol typeSymbol) {
+      if (typeSymbol.IsValueType) {
+        return true;
+      }
+
+      if (typeSymbol.IsReferenceType) {
+        return false;
+      }
+
+      return typeSymbol.TypeKind == TypeKind.TypeParameter;
     }
 
     public static bool IsExplicitInterfaceImplementation(this ISymbol symbol) {
@@ -1019,7 +1058,7 @@ namespace CSharpLua {
     }
 
     public static bool IsNotNullParameterExists(this IMethodSymbol symbol) {
-      return symbol.FindNotNullParameterIndex() != -1;
+      return symbol.OriginalDefinition.FindNotNullParameterIndex() != -1;
     }
 
     public static bool IsCombineImplicitlyCtorMethod(this IMethodSymbol symbol, out int notNullParameterIndex) {

@@ -107,6 +107,7 @@ namespace CSharpLua {
     private readonly Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>> partialTypes_ = new Dictionary<INamedTypeSymbol, List<PartialTypeDeclaration>>();
     private readonly HashSet<string> monoBehaviourSpeicalMethodNames_;
     private IMethodSymbol mainEntryPoint_;
+    public INamedTypeSymbol SystemExceptionTypeSymbol { get; }
     private readonly INamedTypeSymbol monoBehaviourTypeSymbol_;
 
     static LuaSyntaxGenerator() {
@@ -130,6 +131,7 @@ namespace CSharpLua {
       XmlMetaProvider = new XmlMetaProvider(metas);
       CommandLineArguments = arguments;
       Setting = setting;
+      SystemExceptionTypeSymbol = compilation.GetTypeByMetadataName("System.Exception");
       if (compilation.ReferencedAssemblyNames.Any(i => i.Name.Contains("UnityEngine"))) {
         monoBehaviourTypeSymbol_ = compilation.GetTypeByMetadataName("UnityEngine.MonoBehaviour");
         if (monoBehaviourTypeSymbol_ != null) {
@@ -350,9 +352,8 @@ namespace CSharpLua {
           parentTypes.Add(superType.OriginalDefinition);
           foreach (var typeArgument in superType.TypeArguments) {
             if (typeArgument.Kind != SymbolKind.TypeParameter) {
-              if (!rootType.IsAssignableFrom(typeArgument.OriginalDefinition)) {
-                INamedTypeSymbol typeArgumentType = (INamedTypeSymbol)typeArgument;
-                AddSuperTypeTo(parentTypes, rootType, typeArgumentType);
+              if (!typeArgument.OriginalDefinition.Is(rootType)) {
+                AddSuperTypeTo(parentTypes, rootType, (INamedTypeSymbol)typeArgument);
               }
             }
           }
@@ -1124,7 +1125,7 @@ namespace CSharpLua {
 
     public bool IsMonoBehaviourSpeicalMethod(IMethodSymbol symbol) {
       if (monoBehaviourSpeicalMethodNames_ != null && monoBehaviourSpeicalMethodNames_.Contains(symbol.Name)) {
-        return monoBehaviourTypeSymbol_.IsAssignableFrom(symbol.ContainingType);
+        return symbol.ContainingType.Is(monoBehaviourTypeSymbol_);
       }
       return false;
     }
@@ -1678,10 +1679,13 @@ namespace CSharpLua {
         case SymbolKind.ArrayType: {
           var arrayType = (IArrayTypeSymbol)symbol;
           ++genericTypeCounter_;
-          var elementTypeExpression = GetTypeName(arrayType.ElementType, transfor);
+          var elementType = GetTypeName(arrayType.ElementType, transfor);
           --genericTypeCounter_;
-          var arrayTypeExpression = arrayType.Rank == 1 ? LuaIdentifierNameSyntax.Array : LuaIdentifierNameSyntax.MultiArray;
-          LuaExpressionSyntax luaExpression = new LuaInvocationExpressionSyntax(arrayTypeExpression, elementTypeExpression);
+          var invocation = new LuaInvocationExpressionSyntax(LuaIdentifierNameSyntax.Array, elementType);
+          if (arrayType.Rank > 1) {
+            invocation.AddArgument(arrayType.Rank.ToString());
+          }
+          LuaExpressionSyntax luaExpression = invocation;
           if (transfor != null) {
             transfor.ImportGenericTypeName(ref luaExpression, arrayType);
           }

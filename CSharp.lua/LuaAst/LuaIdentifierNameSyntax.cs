@@ -44,7 +44,6 @@ namespace CSharpLua.LuaAst {
     public static readonly LuaIdentifierNameSyntax Array = "System.Array";
     public static readonly LuaIdentifierNameSyntax MultiArray = "System.MultiArray";
     public static readonly LuaIdentifierNameSyntax Apply = "System.apply";
-    public static readonly LuaIdentifierNameSyntax Add = "Add";
     public static readonly LuaIdentifierNameSyntax StaticCtor = "static";
     public static readonly LuaIdentifierNameSyntax Init = "internal";
     public static readonly LuaIdentifierNameSyntax Ctor = "__ctor__";
@@ -83,6 +82,7 @@ namespace CSharpLua.LuaAst {
     public static readonly LuaIdentifierNameSyntax BoolAndOfNull = "System.andOfNull";
     public static readonly LuaIdentifierNameSyntax BoolXorOfNull = "System.xorOfBoolNull";
     public static readonly LuaIdentifierNameSyntax Try = "System.try";
+    public static readonly LuaIdentifierNameSyntax CatchFilter = "System.when";
     public static readonly LuaIdentifierNameSyntax Is = "System.is";
     public static readonly LuaIdentifierNameSyntax As = "System.as";
     public static readonly LuaIdentifierNameSyntax Cast = "System.cast";
@@ -102,6 +102,8 @@ namespace CSharpLua.LuaAst {
     public static readonly LuaIdentifierNameSyntax Methods = "methods";
     public static readonly LuaIdentifierNameSyntax setmetatable = "setmetatable";
     public static readonly LuaIdentifierNameSyntax Clone = "__clone__";
+    public static readonly LuaIdentifierNameSyntax NullableClone = "System.Nullable.clone";
+    public static readonly LuaIdentifierNameSyntax CopyThis = "__copy__";
     public static readonly LuaIdentifierNameSyntax ValueType = "System.ValueType";
     public static readonly LuaIdentifierNameSyntax DateTime = "System.DateTime";
     public static readonly LuaIdentifierNameSyntax TimeSpan = "System.TimeSpan";
@@ -118,7 +120,9 @@ namespace CSharpLua.LuaAst {
     public static readonly LuaIdentifierNameSyntax ValueTupleTypeCreate = "System.valueTuple";
     public static readonly LuaIdentifierNameSyntax Deconstruct = "Deconstruct";
     public static readonly LuaIdentifierNameSyntax KeyValuePair = "System.KeyValuePair";
+    public static readonly LuaIdentifierNameSyntax NullableType = "System.Nullable";
     public static readonly LuaIdentifierNameSyntax __GC = "__gc";
+    public static readonly LuaIdentifierNameSyntax __ToString = "__tostring";
     public static readonly LuaIdentifierNameSyntax Await = "await";
     public static readonly LuaIdentifierNameSyntax Async = "async";
     public static readonly LuaIdentifierNameSyntax MorenManyLocalVarTempTable = "const";

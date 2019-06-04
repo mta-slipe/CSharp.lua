@@ -54,9 +54,10 @@ namespace Bridge.ClientTest.CSharp7
             Assert.AreEqual(20, anotherScore, "Changing the referenceable variable does not affect non-referencing variabel.");
         }
 
+#if false
         private static ref int ThirdElement(int[] array)
         {
-            int a = 10;
+            int a = 3;
             return ref array[a];
         }
 
@@ -121,7 +122,7 @@ namespace Bridge.ClientTest.CSharp7
             Assert.AreEqual(5, i, "Reference returning method did not return the wrong value.");
             Assert.AreEqual(20, j, "Reference returning method assigned the expected variable.");
         }
-
+#endif
 
         public struct Point3D
         {
