@@ -36,6 +36,7 @@ namespace Bridge.ClientTest.SimpleTypes
         }
 #endif
 
+#if !__JIT__
         [Test]
         public void MinMaxValuesAreCorrect()
         {
@@ -103,6 +104,7 @@ namespace Bridge.ClientTest.SimpleTypes
                 Assert.Throws(() => { var l = -min; }, err => err is OverflowException);
             }
         }
+#endif
 
         [Test]
         public void CombinedTypesOperationsWork()
@@ -236,6 +238,7 @@ namespace Bridge.ClientTest.SimpleTypes
             Assert.False(result);
             Assert.AreEqual(0L, numberResult);
 
+#if false
             result = long.TryParse("-10000000000000000000", out numberResult);
             Assert.False(result);
             Assert.AreEqual(0L, numberResult);
@@ -243,6 +246,7 @@ namespace Bridge.ClientTest.SimpleTypes
             result = long.TryParse("10000000000000000000", out numberResult);
             Assert.False(result);
             Assert.AreEqual(0L, numberResult);
+#endif
         }
 
         [Test]
@@ -296,7 +300,6 @@ namespace Bridge.ClientTest.SimpleTypes
             Assert.AreEqual(((long)0).GetHashCode(), ((long)0).GetHashCode());
             Assert.AreEqual(((long)1).GetHashCode(), ((long)1).GetHashCode());
             Assert.AreNotEqual(((long)1).GetHashCode(), ((long)0).GetHashCode());
-            Assert.True((long)0x100000000L.GetHashCode() <= 0xffffffffL);
         }
 
         [Test]
@@ -350,16 +353,22 @@ namespace Bridge.ClientTest.SimpleTypes
             Assert.True(8388608 == x << 23);
             Assert.True(16777216 == x << 24);
             Assert.True(33554432 == x << 25);
+#if !__JIT__
             Assert.True(4294967296 == x << 32);
             Assert.True(140737488355328 == x << 47);
             Assert.True(281474976710656 == x << 48);
             Assert.True(562949953421312 == x << 49);
             Assert.True(-9223372036854775808 == x << 63);
+#endif
+
+#if false
             Assert.True(1 == x << 64);
+#endif
 
             var t = 1L;
             Assert.True(0 == t >> 1);
 
+#if false
             var y = x << 63;
             Assert.True(-9223372036854775808 == y);
             Assert.True(-4611686018427387904 == y >> 1);
@@ -379,6 +388,7 @@ namespace Bridge.ClientTest.SimpleTypes
             Assert.True(-16384 == y >> 49);
             Assert.True(-1 == y >> 63);
             Assert.True(-9223372036854775808 == y >> 64);
+#endif
         }
     }
 }

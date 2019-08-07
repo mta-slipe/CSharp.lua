@@ -83,7 +83,7 @@ namespace CSharpLua {
       if (node.Initializer == null) {
         return creationExpression;
       } else {
-        var temp = GetTempIdentifier(node);
+        var temp = GetTempIdentifier();
         CurBlock.AddStatement(new LuaLocalVariableDeclaratorSyntax(temp, creationExpression));
         FillObjectInitializerExpression(temp, node.Initializer);
         return !node.Parent.IsKind(SyntaxKind.ExpressionStatement) ? temp : LuaExpressionSyntax.EmptyExpression;
@@ -114,6 +114,8 @@ namespace CSharpLua {
           var name = GetMemberName(symbol);
           var memberAccess = new LuaMemberAccessExpressionSyntax(temp, name, true);
           var invocation = new LuaInvocationExpressionSyntax(memberAccess);
+          var block = new LuaBlockSyntax();
+          PushBlock(block);
           if (expression.IsKind(SyntaxKind.ComplexElementInitializerExpression)) {
             var initializer = (InitializerExpressionSyntax)expression;
             foreach (var expressionNode in initializer.Expressions) {
@@ -124,6 +126,8 @@ namespace CSharpLua {
             var value = (LuaExpressionSyntax)expression.Accept(this);
             invocation.AddArgument(value);
           }
+          PopBlock();
+          CurBlock.Statements.AddRange(block.Statements);
           CurBlock.AddStatement(invocation);
         }
       }
@@ -539,7 +543,7 @@ namespace CSharpLua {
     private LuaTryAdapterExpressionSyntax VisitTryCatchesExpress(SyntaxList<CatchClauseSyntax> catches) {
       LuaTryAdapterExpressionSyntax functionExpress = new LuaTryAdapterExpressionSyntax();
       PushFunction(functionExpress);
-      var temp = GetTempIdentifier(catches.First());
+      var temp = GetTempIdentifier();
       functionExpress.CatchTemp = temp;
       functionExpress.AddParameter(temp);
 
@@ -638,8 +642,8 @@ namespace CSharpLua {
         var curMethodInfo = CurMethodInfoOrNull;
         bool isReturnVoid = curMethodInfo != null && curMethodInfo.Symbol.ReturnsVoid;
 
-        var temp1 = GetTempIdentifier(node);
-        var temp2 = isReturnVoid ? null : GetTempIdentifier(node);
+        var temp1 = GetTempIdentifier();
+        var temp2 = isReturnVoid ? null : GetTempIdentifier();
         var localVariables = new LuaLocalVariablesStatementSyntax();
         localVariables.Variables.Add(temp1);
         if (temp2 != null) {
@@ -842,7 +846,7 @@ namespace CSharpLua {
 
       bool isRoot = !node.Parent.IsKind(SyntaxKind.ConditionalAccessExpression);
       if (isRoot) {
-        conditionalTemps_.Push(GetTempIdentifier(node.Expression));
+        conditionalTemps_.Push(GetTempIdentifier());
       }
 
       var temp = conditionalTemps_.Peek();
