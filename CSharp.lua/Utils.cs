@@ -304,6 +304,10 @@ namespace CSharpLua {
       return token.IsKind(SyntaxKind.OutKeyword) || token.IsKind(SyntaxKind.RefKeyword);
     }
 
+    public static bool IsBasicType(this ITypeSymbol type) {
+      return type.SpecialType >= SpecialType.System_Enum && type.SpecialType <= SpecialType.System_Double;
+    }
+
     public static bool IsStringType(this ITypeSymbol type) {
       return type.SpecialType == SpecialType.System_String;
     }
@@ -505,12 +509,12 @@ namespace CSharpLua {
       }
 
       ITypeSymbol p = child;
-      if (p == parent) {
+      if (p.Equals(parent)) {
         return false;
       }
 
       while (p != null) {
-        if (p == parent) {
+        if (p.Equals(parent)) {
           return true;
         }
         p = p.BaseType;
@@ -540,7 +544,7 @@ namespace CSharpLua {
 
     public static bool IsNumberTypeAssignableFrom(this ITypeSymbol left, ITypeSymbol right) {
       if (left.SpecialType.IsBaseNumberType() && right.SpecialType.IsBaseNumberType()) {
-        if (left == right) {
+        if (left.Equals(right)) {
           return true;
         }
 
@@ -604,7 +608,7 @@ namespace CSharpLua {
 
     public static void CheckMethodDefinition(ref IMethodSymbol symbol) {
       if (symbol.IsExtensionMethod) {
-        if (symbol.ReducedFrom != null && symbol.ReducedFrom != symbol) {
+        if (symbol.ReducedFrom != null && !symbol.ReducedFrom.Equals(symbol)) {
           symbol = symbol.ReducedFrom;
         }
       } else {
@@ -616,7 +620,7 @@ namespace CSharpLua {
       if (symbol.Kind == SymbolKind.Method) {
         IMethodSymbol methodSymbol = (IMethodSymbol)symbol;
         CheckMethodDefinition(ref methodSymbol);
-        if (methodSymbol != symbol) {
+        if (!methodSymbol.Equals(symbol)) {
           symbol = methodSymbol;
         }
       } else {
@@ -934,7 +938,7 @@ namespace CSharpLua {
           break;
         }
         case SymbolKind.TypeParameter: {
-          return matchType == null || symbol == matchType;
+          return matchType == null || symbol.Equals(matchType);
         }
         case SymbolKind.PointerType: {
           var pointType = (IPointerTypeSymbol)symbol;
@@ -1075,11 +1079,25 @@ namespace CSharpLua {
             int index = ctor.FindNotNullParameterIndex();
             if (index != -1) {
               notNullParameterIndex = index;
-              return symbol == ctor;
+              return symbol.Equals(ctor);
             }
           }
         }
       }
+      return false;
+    }
+
+    public static bool IsEmptyPartialMethod(this IMethodSymbol symbol) {
+      if (symbol.ReturnsVoid && symbol.IsPrivate()) {
+        var p = symbol.GetType().GetProperty("DeclarationModifiers", BindingFlags.NonPublic | BindingFlags.Instance);
+        if (p != null) {
+          var declarationModifiers = p.GetValue(symbol);
+          if (declarationModifiers.ToString().Contains("Partial")) {
+            return symbol.PartialImplementationPart == null || symbol.PartialDefinitionPart != null;
+          }
+        }
+      }
+
       return false;
     }
 

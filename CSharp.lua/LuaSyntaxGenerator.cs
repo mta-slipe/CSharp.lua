@@ -59,10 +59,13 @@ namespace CSharpLua {
       public bool IsExportMetadata { get; set; }
       public string BaseFolder { get; set; } = "";
       public bool IsExportAttributesAll { get; private set; }
+      public bool IsExportEnumAll { get; private set; }
       public bool IsModule { get; set; }
       public HashSet<string> ExportAttributes { get; private set; }
+      public HashSet<string> ExportEnums { get; private set; }
       public HashSet<string> LuaModuleLibs;
       public bool IsInlineSimpleProperty { get; set; }
+      public bool IsPreventDebugObject { get; set; }
 
       public SettingInfo() {
         Indent = 2;
@@ -75,6 +78,18 @@ namespace CSharpLua {
               IsExportAttributesAll = true;
             } else {
               ExportAttributes = new HashSet<string>(value);
+            }
+          }
+        }
+      }
+
+      public string[] Enums {
+        set {
+          if (value != null) {
+            if (value.Length == 0) {
+              IsExportEnumAll = true;
+            } else {
+              ExportEnums = new HashSet<string>(value);
             }
           }
         }
@@ -137,6 +152,9 @@ namespace CSharpLua {
       XmlMetaProvider = new XmlMetaProvider(metas);
       CommandLineArguments = arguments;
       Setting = setting;
+      if (Setting.ExportEnums != null) {
+        exportEnums_.UnionWith(Setting.ExportEnums);
+      }
       SystemExceptionTypeSymbol = compilation.GetTypeByMetadataName("System.Exception");
       if (compilation.ReferencedAssemblyNames.Any(i => i.Name.Contains("UnityEngine"))) {
         monoBehaviourTypeSymbol_ = compilation.GetTypeByMetadataName("UnityEngine.MonoBehaviour");
@@ -219,6 +237,9 @@ namespace CSharpLua {
     }
 
     internal bool IsEnumExport(string enumTypeSymbol) {
+      if (Setting.IsExportEnumAll) {
+        return true;
+      }
       return exportEnums_.Contains(enumTypeSymbol);
     }
 
@@ -353,19 +374,19 @@ namespace CSharpLua {
     }
 
     private void AddSuperTypeTo(HashSet<INamedTypeSymbol> parentTypes, INamedTypeSymbol rootType, INamedTypeSymbol superType) {
-      if (superType.IsFromCode()) {
-        if (superType.IsGenericType) {
+      if (superType.IsGenericType) {
+        if (superType.OriginalDefinition.IsFromCode()) {
           parentTypes.Add(superType.OriginalDefinition);
-          foreach (var typeArgument in superType.TypeArguments) {
-            if (typeArgument.Kind != SymbolKind.TypeParameter) {
-              if (!typeArgument.OriginalDefinition.Is(rootType)) {
-                AddSuperTypeTo(parentTypes, rootType, (INamedTypeSymbol)typeArgument);
-              }
+        }
+        foreach (var typeArgument in superType.TypeArguments) {
+          if (typeArgument.Kind != SymbolKind.TypeParameter) {
+            if (typeArgument.OriginalDefinition.IsFromCode() && !typeArgument.OriginalDefinition.Is(rootType)) {
+              AddSuperTypeTo(parentTypes, rootType, (INamedTypeSymbol)typeArgument);
             }
           }
-        } else {
-          parentTypes.Add(superType);
         }
+      } else if (superType.IsFromCode()) {
+        parentTypes.Add(superType);
       }
     }
 
@@ -607,12 +628,27 @@ namespace CSharpLua {
       return GetAllTypeSameName(symbol);
     }
 
+    private static bool IsSameNameSymbol(ISymbol member, ISymbol symbol) {
+      if (member.Equals(symbol)) {
+        return true;
+      }
+
+      if (symbol.Kind == SymbolKind.Method) {
+        var methodSymbol = (IMethodSymbol)symbol;
+        if (methodSymbol.PartialDefinitionPart != null && methodSymbol.PartialDefinitionPart.Equals(member)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
     private LuaIdentifierNameSyntax GetAllTypeSameName(ISymbol symbol) {
       List<ISymbol> sameNameMembers = GetSameNameMembers(symbol);
       LuaIdentifierNameSyntax symbolExpression = null;
       int index = 0;
       foreach (ISymbol member in sameNameMembers) {
-        if (member.Equals(symbol)) {
+        if (IsSameNameSymbol(member, symbol)) {
           symbolExpression = GetSymbolBaseName(symbol);
         } else {
           if (!memberNames_.ContainsKey(member)) {
@@ -746,7 +782,7 @@ namespace CSharpLua {
       var rootType = symbol.ContainingType;
       var curTypeSymbol = rootType;
       while (true) {
-        AddSimilarNameMembers(curTypeSymbol, names, members, rootType != curTypeSymbol);
+        AddSimilarNameMembers(curTypeSymbol, names, members, !rootType.Equals(curTypeSymbol));
         var baseTypeSymbol = curTypeSymbol.BaseType;
         if (baseTypeSymbol != null) {
           curTypeSymbol = baseTypeSymbol;
@@ -853,7 +889,7 @@ namespace CSharpLua {
         if (countOfA == 1) {
           var implementationOfA = a.InterfaceImplementations().First();
           var implementationOfB = b.InterfaceImplementations().First();
-          if (implementationOfA == implementationOfB) {
+          if (implementationOfA.Equals(implementationOfB)) {
             throw new CompilationErrorException($"{a} is conflict with {b}");
           }
 
@@ -1209,7 +1245,7 @@ namespace CSharpLua {
               }
 
               var implementationType = implementationMember.ContainingType;
-              if (implementationType != type) {
+              if (!implementationType.Equals(type)) {
                 if (!implementationType.AllInterfaces.Contains(baseInterface)) {
                   generator_.AddImplicitInterfaceImplementation(implementationMember, interfaceMember);
                   generator_.TryAddExtend(baseInterface, implementationType);
@@ -1275,7 +1311,7 @@ namespace CSharpLua {
       }
 
       private static bool CheckTypeNameExists(IEnumerable<ISymbol> all, ISymbol type, string newName) {
-        return all.Where(i => i.ContainingNamespace == type.ContainingNamespace).Any(i => i.Name == newName);
+        return all.Where(i => i.ContainingNamespace.Equals(type.ContainingNamespace)).Any(i => i.Name == newName);
       }
 
       private void CheckNamespace() {
@@ -1503,12 +1539,12 @@ namespace CSharpLua {
         int index = 0;
         switch (symbol.Kind) {
           case SymbolKind.Method: {
-            index = methods.FindIndex(i => i == symbol);
+            index = methods.FindIndex(i => i.Equals(symbol));
             break;
           }
           case SymbolKind.Property:
           case SymbolKind.Event: {
-            index = methods.FindIndex(i => i.Kind == SymbolKind.Method && ((IMethodSymbol)i).AssociatedSymbol == symbol) + 1;
+            index = methods.FindIndex(i => i.Kind == SymbolKind.Method && symbol.Equals(((IMethodSymbol)i).AssociatedSymbol)) + 1;
             break;
           }
         }
